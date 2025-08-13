@@ -1,22 +1,248 @@
-html {
-  font-size: 14px;
+/* Gradient background */
+.auth-wrap {
+    background: linear-gradient(to right, #8DC71E 30%, #187C19 70%);
 }
 
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
+.auth-row {
+    min-height: 100vh; /* full height for the row */
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+/* Left image column */
+.login-visual {
+    background-image: url("/img/loginimage.png");
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: contain; /* keep full image visible */
+    width: 100%;
+    height: clamp(50vh, 60vh, 80vh); /* large by default (~half screen), responsive */
+    min-height: 400px; /* never too small */
+    margin-left: 2rem;
 }
 
-html {
-  position: relative;
-  min-height: 100%;
+/* Extra large screens: still big, but avoid being huge */
+@media (min-width: 1600px) {
+    .login-visual {
+        height: clamp(55vh, 65vh, 75vh);
+    }
 }
 
-body {
-  margin-bottom: 60px;
+/* Right login card */
+.login-card {
+    width: min(520px, 92vw);
+    background-color: #fff;
+    border-radius: 1rem;
+}
+
+    .login-card .form-control {
+        min-height: 44px;
+    }
+
+    .login-card .btn.btn-success {
+        font-weight: 600;
+    }
+
+/* More spacing on wide screens */
+@media (min-width: 1400px) {
+    .login-card {
+        margin-right: 2.5rem;
+    }
+}
+
+/* Tablet & below: hide image */
+@media (max-width: 991.98px) {
+    .auth-wrap {
+        padding: 2rem 0;
+    }
+
+    .login-visual {
+        display: none;
+    }
+}
+
+/* WHAT IT DOES: Places decorative rocket image bottom-left for Create page */
+
+.teacher-wrap {
+    position: relative; /* ensure rocket positions relative to full page container */
+}
+
+.teacher-rocket {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: clamp(380px, 45vw, 720px);
+    height: clamp(380px, 65vh, 820px);
+    background-image: url("/img/class-rocket.png");
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    background-size: contain;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.95;
+}
+
+/* Ensure teacher page content stays above rocket */
+.teacher-create, .stepbar-wrap {
+    position: relative;
+    z-index: 1;
+}
+
+.teacher-create {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 5rem; /* lift content away from rocket base */
+}
+
+/* Hide rocket on mobile for clarity */
+@media (max-width: 767.98px) {
+    .teacher-rocket {
+        display: none;
+    }
+}
+
+/* Shared styles for Step 1 & Step 2 main headings/subheadings */
+.teacher-step h3 {
+    font-size: 1.75rem; /* Matches mockup heading size */
+    font-weight: 700; /* Bold for emphasis */
+    color: #1F1F1F; /* Dark neutral */
+    margin-bottom: 0.5rem;
+}
+
+.teacher-step p {
+    font-size: 1rem; /* Comfortable reading size */
+    color: #7D7D7D; /* Muted gray to match mock */
+    line-height: 1.5; /* Better readability */
+    margin-bottom: 1.5rem;
+}
+
+
+/* --- Step bar --- */
+/* adjust once here to change both pages */
+:root {
+    --stepbar-width: 860px;
+}
+
+.stepbar-wrap {
+    width: min(var(--stepbar-width), 92vw);
+    margin: 2rem auto 1.5rem; /* centered horizontally */
+}
+
+.stepbar-labels {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* two equal halves */
+    column-gap: 0;
+    margin-bottom: .5rem;
+}
+
+.step-label {
+    text-align: center; /* label sits in the middle of its half */
+    font-size: .95rem;
+    color: #6C757D;
+    font-weight: 500;
+}
+
+.step-label.active {
+    color: #198754; /* active step color */
+    font-weight: 600;
+}
+
+.stepbar-track {
+    height: 2px;
+    background: #E5E8E5;
+    position: relative;
+    border-radius: 2px;
+}
+
+.stepbar-fill {
+    position: absolute;
+    inset: 0 auto 0 0; /* left:0; right:auto */
+    background: #198754;
+    border-radius: 2px;
+    width: 50%; /* overridden inline to 50%/100% */
+}
+
+.teacher-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 1rem 3rem;
+}
+
+.teacher-body {
+    width: min(560px, 90%); /* pleasant width; centers content */
+}
+
+/* Mobile / tablet tweaks */
+@media (max-width: 991.98px) {
+    .create-rocket {
+        display: none;
+    }
+
+    .stepbar {
+        margin: 1rem 0 1rem;
+    }
+
+    .stepbar-track, .stepbar-labels {
+        width: 92%;
+    }
+
+    .teacher-content {
+        padding: 0 1rem 2rem;
+    }
+}
+
+.card.rounded-4 {
+    border-radius: 1rem;
+}
+
+.bg-success-subtle {
+    background: #E6F4EA;
+    color: #146C43;
+}
+
+/* WHAT IT DOES: Green class cards like the mock, small polish, settings rocket */
+
+.class-grid {
+    align-items: stretch;
+}
+
+.class-card-green {
+    background: linear-gradient(180deg, #19A34A 0%, #187C19 100%);
+    border-radius: 1rem;
+    padding: 1rem 1rem 0.85rem;
+    color: #fff;
+    box-shadow: 0 12px 24px rgba(0,0,0,.08);
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.class-card-title {
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.class-card-meta {
+    opacity: .85;
+    font-size: .9rem;
+    margin: .25rem 0 .75rem;
+}
+
+.class-card-actions .btn {
+    border-radius: .6rem;
+}
+
+/* Help / Settings modals rounding matches your aesthetic */
+.modal-content.rounded-4 {
+    border-radius: 1rem;
+}
+
+/* Settings rocket illustration (right side) */
+.settings-rocket {
+    background: url("/img/class-rocket.png") no-repeat right bottom / contain;
+    width: 100%;
+    height: clamp(320px, 48vh, 560px);
+    filter: drop-shadow(0 16px 42px rgba(0,0,0,.12));
+    opacity: 0.95;
 }

@@ -1,0 +1,15 @@
+﻿@* Views/Shared/_StepProgress.cshtml — centered, fixed-width 2-step header *@
+@* WHAT IT DOES: Renders a bar with two equal halves; labels are centered in each half. *@
+@{
+    var step = (int?)ViewData["Step"] ?? 1;
+    var fillPct = step >= 2 ? "100%" : "50%";
+}
+<div class="stepbar-wrap">
+    <div class="stepbar-labels">
+        <span class="step-label @(step == 1 ? "active" : "")">Step 1</span>
+        <span class="step-label @(step == 2 ? "active" : "")">Step 2</span>
+    </div>
+    <div class="stepbar-track">
+        <div class="stepbar-fill" style="width:@fillPct;"></div>
+    </div>
+</div>

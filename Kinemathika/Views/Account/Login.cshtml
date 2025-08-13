@@ -1,0 +1,94 @@
+﻿@* Views/Account/Login.cshtml — two-column layout: left image, right login card *@
+@* WHAT IT DOES: Lays out the login page with a left hero image and a right-aligned card, centered vertically. *@
+@model Kinemathika.ViewModels.Account.LoginViewModel
+@{
+    ViewData["IsAuthPage"] = true; // hide navbar/footer in layout
+    ViewData["Title"] = "Login";
+}
+<div class="container-fluid auth-wrap min-vh-100 d-flex align-items-center">
+    <div class="row auth-row flex-grow-1 justify-content-between align-items-center g-0">
+
+        <!-- Left visual column (hidden on small screens) -->
+        <div class="col-lg-5 d-none d-lg-flex align-items-center">
+            <div class="login-visual"></div>
+        </div>
+
+        <!-- Right card column -->
+        <div class="col-12 col-lg-7 d-flex justify-content-lg-end justify-content-center px-3 px-lg-5">
+            <div class="login-card card shadow border-0 rounded-4">
+                <div class="card-body p-4 p-lg-5">
+                    <h3 class="fw-semibold text-center mb-4">Login</h3>
+
+                    <form asp-action="Login" asp-controller="Account" method="post" novalidate>
+                        @Html.AntiForgeryToken()
+
+                        <div class="mb-3">
+                            <label asp-for="Email" class="form-label">Email Address</label>
+                            <input asp-for="Email"
+                                   class="form-control @(ViewData.ModelState[nameof(Model.Email)]?.Errors.Count > 0 ? "is-invalid" : "")"
+                                   placeholder="name@example.com" />
+                            <span asp-validation-for="Email" class="invalid-feedback"></span>
+                        </div>
+
+                        <div class="mb-2">
+                            <label asp-for="Password" class="form-label">Password</label>
+                            <div class="input-group">
+                                <input asp-for="Password" type="password"
+                                       class="form-control @(ViewData.ModelState[nameof(Model.Password)]?.Errors.Count > 0 ? "is-invalid" : "")"
+                                       placeholder="••••••••" id="pwdInput" />
+                                <button type="button" class="btn btn-outline-secondary" id="togglePwd" aria-label="Show password">
+                                    <i class="bi bi-eye" id="togglePwdIcon"></i>
+                                </button>
+                            </div>
+                            <span asp-validation-for="Password" class="invalid-feedback d-block"></span>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" asp-for="RememberMe" id="rememberMe">
+                                <label class="form-check-label" for="rememberMe">Remember me</label>
+                            </div>
+                            <button type="button" class="btn btn-link p-0 small" data-bs-toggle="modal" data-bs-target="#forgotModal">
+                                Forgot password?
+                            </button>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" formnovalidate class="btn btn-success btn-lg rounded-3">Login</button>
+                        </div>
+
+                        <div class="mt-3">
+                            <div asp-validation-summary="ModelOnly" class="text-danger small"></div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@await Html.PartialAsync("_ForgotPasswordModal")
+@await Html.PartialAsync("_ResetSentModal")
+
+<!--
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // WHAT IT DOES: Toggle show/hide password with icon switch.
+        (function () {
+            const pwd = document.getElementById('pwdInput');
+            const btn = document.getElementById('togglePwd');
+            const icon = document.getElementById('togglePwdIcon');
+            if (btn && pwd) {
+                btn.addEventListener('click', function () {
+                    const show = pwd.type === 'password';
+                    pwd.type = show ? 'text' : 'password';
+                    icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+                    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+                });
+            }
+        })();
+    </script>
+}
+-->

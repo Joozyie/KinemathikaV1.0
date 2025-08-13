@@ -1,0 +1,31 @@
+﻿@* Views/Account/_ResetSentModal.cshtml — success modal after POST *@
+@{
+    var show = TempData["ResetSent"] as bool? == true;
+}
+<div class="modal fade @(show ? "show" : "")" id="resetSentModal" tabindex="-1" aria-labelledby="resetSentLabel"
+     aria-modal="true" role="dialog" style="@(show ? "display:block;" : "")">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resetSentLabel">Password Reset</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                We’ve emailed you a reset link. Please check your inbox.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" data-bs-dismiss="modal">Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // auto-open success modal when controller set TempData["ResetSent"]=true
+        (function(){
+            var needsShow = '@show'.toLowerCase() === 'true';
+            if (needsShow) new bootstrap.Modal(document.getElementById('resetSentModal')).show();
+        })();
+    </script>
+}

@@ -1,0 +1,43 @@
+﻿@* Views/Teacher/Create.cshtml — add a left-side rocket below the main container *@
+@* WHAT IT DOES: Keeps your centered content; adds a decorative rocket anchored bottom-left *@
+@model Kinemathika.ViewModels.Teacher.CreateClassStep1Vm
+@{
+    ViewData["IsAuthPage"] = true;
+    ViewData["Title"] = "Create Class";
+    ViewData["Step"] = 1;
+}
+<div class="teacher-wrap min-vh-100 d-flex align-items-center position-relative">
+    <div class="container-xxl">
+        <div class="teacher-create mx-auto">
+            @await Html.PartialAsync("~/Views/Shared/_StepProgress.cshtml")
+
+            <div class="mb-4 teacher-step text-center">
+                <h3 class="mb-2">Welcome! Let’s set up your classroom.</h3>
+                <p class="mb-0">Think of a name that your students will easily recognize.</p>
+                <p class="mb-0">Don't worry! You can change the name later if needed.</p>
+            </div>
+
+            <form asp-action="Create" method="post" novalidate>
+                @Html.AntiForgeryToken()
+
+                <div class="mb-3 text-center">
+                    <label asp-for="ClassName" class="form-label">Classroom Name</label>
+                    <div class="mx-auto" style="max-width: 400px;">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-pencil"></i></span>
+                            <input asp-for="ClassName" class="form-control" placeholder="Enter Class Name" />
+                        </div>
+                    </div>
+                    <span asp-validation-for="ClassName" class="text-danger small d-block"></span>
+                </div>
+
+                <div class="text-center mt-1">
+                    <button class="btn btn-success px-4" type="submit">Create Classroom</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Decorative Rocket -->
+    <div class="teacher-rocket"></div>
+</div>

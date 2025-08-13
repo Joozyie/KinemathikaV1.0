@@ -1,0 +1,50 @@
+﻿@* Views/Teacher/Help.cshtml — Help page with left sidebar *@
+@* WHAT IT DOES: Adds left sidebar; right side shows manual button/modal *@
+@using Kinemathika.ViewModels.Teacher
+@{
+    ViewData["IsAuthPage"] = true;
+    ViewData["Title"] = "Help";
+    var sidebar = (SidebarVm)ViewBag.Sidebar;
+}
+<div class="container-xxl py-3">
+    <!-- Top bar -->
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="fw-semibold">Help</div>
+        <a class="btn btn-outline-danger" asp-controller="Account" asp-action="Logout">Logout</a>
+    </div>
+
+    <div class="row g-4">
+        <!-- LEFT: Sidebar -->
+        <div class="col-12 col-lg-3">
+            @await Html.PartialAsync("~/Views/Shared/_TeacherSidebar.cshtml", sidebar)
+        </div>
+
+        <!-- RIGHT: Help content -->
+        <div class="col-12 col-lg-9">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body">
+                    <p class="mb-3">Find answers, guides, and contact links.</p>
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#userManualModal">Open User Manual</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Manual Modal -->
+<div class="modal fade" id="userManualModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4">
+            <div class="modal-header">
+                <h5 class="modal-title">User Manual</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Download the latest teacher user manual for Kinemathika.</p>
+            </div>
+            <div class="modal-footer">
+                <a class="btn btn-success" asp-action="DownloadManual">Download</a>
+            </div>
+        </div>
+    </div>
+</div>
