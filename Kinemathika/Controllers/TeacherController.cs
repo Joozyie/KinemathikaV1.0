@@ -168,22 +168,10 @@ namespace Kinemathika.Controllers
         {
             ViewBag.Sidebar = BuildSidebar(); // optional: sidebar on step 2 as well
 
-            var className = TempData.Peek("ClassName") as string ?? "New Class";
-            var vm = new CreateClassStep2Vm
-            {
-                ClassName = className,
-                Students = new()
-                {
-                    new() { Id=1, StudentId="110219252", Name="Alexander McQueen", Email="alex123@example.com" },
-                    new() { Id=2, StudentId="130476090", Name="Lewis Hamilton",   Email="lewis123@example.com" },
-                    new() { Id=3, StudentId="112233445", Name="Ada Lovelace",     Email="ada@math.dev" }
-                }
-            };
             return View(vm);
         }
 
         [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Assign(CreateClassStep2Vm vm, string? action)
-            => RedirectToAction(nameof(Dashboard));
     }
 }
