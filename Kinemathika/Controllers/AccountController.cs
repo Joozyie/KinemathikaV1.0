@@ -20,12 +20,9 @@ namespace Kinemathika.Controllers
         [ValidateAntiForgeryToken]
         public IActionResult Login(LoginViewModel model, string? returnUrl = null)
         {
-            if (!ModelState.IsValid)
-                return View(model);
-
-            // TODO: Replace with IAuthService/Identity sign-in
-            var emailOk = !string.IsNullOrWhiteSpace(model.Email);
-            var passOk = model.Password == "Password123!"; // demo only
+            // Validate email has '@' and password matches exactly
+            var emailOk = !string.IsNullOrWhiteSpace(model.Email) && model.Email.Contains("@");
+            var passOk = model.Password == "123";
 
             if (!(emailOk && passOk))
             {
@@ -33,11 +30,10 @@ namespace Kinemathika.Controllers
                 return View(model);
             }
 
-            // You could set a TempData toast to simulate success
             TempData["Toast"] = "Welcome back!";
-            // TODO: Auth cookie + Redirect to dashboard
-            return RedirectToAction("Index", "Teacher");
+            return RedirectToAction("Dashboard", "Teacher");
         }
+
 
         // POST /Account/ForgotPassword
         // Accepts an email and shows the "Reset link sent" modal via TempData

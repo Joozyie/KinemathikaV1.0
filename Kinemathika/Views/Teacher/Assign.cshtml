@@ -45,7 +45,7 @@
                         {
                             <tr>
                                 <td>
-                                    <input class="form-check-input row-check" type="checkbox" name="SelectedIds" value="@Model.Students[i].Id">
+                                    <input class="form-check-input row-check" type="checkbox" name="SelectedIds" value="@Model.Students[i].StudentId">
                                 </td>
                                 <td class="sid">@Model.Students[i].StudentId</td>
                                 <td class="sname">@Model.Students[i].Name</td>
@@ -60,6 +60,10 @@
                 <button class="btn btn-outline-secondary" type="submit" name="action" value="later">Do it later</button>
                 <button class="btn btn-success px-4" type="submit" name="action" value="done">Done</button>
             </div>
+            <button type="button" class="btn btn-outline-secondary" onclick="window.history.back();">
+                ← Back
+            </button>
+
         </form>
     </div>
 </div>

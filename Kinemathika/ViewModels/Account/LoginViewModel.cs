@@ -1,11 +1,12 @@
-﻿// ViewModels/Account/LoginViewModel.cs
+﻿// WHAT IT DOES: Makes Email required (not format-validated); keeps Password + RememberMe.
+
 using System.ComponentModel.DataAnnotations;
 
 namespace Kinemathika.ViewModels.Account
 {
     public class LoginViewModel
     {
-        [Required, EmailAddress(ErrorMessage = "Please enter a valid email.")]
+        [Required(ErrorMessage = "Please enter your email.")]
         public string Email { get; set; } = string.Empty;
 
         [Required, DataType(DataType.Password)]

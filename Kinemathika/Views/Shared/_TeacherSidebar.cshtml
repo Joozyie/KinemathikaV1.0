@@ -1,20 +1,24 @@
-﻿@* Views/Shared/_TeacherSidebar.cshtml *@
-@* WHAT IT DOES: Shows professor name, up to 4 recent classes, and nav links *@
+﻿@* WHAT IT DOES: Adds an "Overall Overview" link, keeps class links pointing with classId. *@
+@* FILE: Views/Shared/_TeacherSidebar.cshtml (replace only the inner markup as shown) *@
 @model Kinemathika.ViewModels.Teacher.SidebarVm
 
 <div class="card border-0 shadow-sm rounded-4 teacher-side">
     <div class="card-body">
         <div class="fw-semibold mb-3">@Model.TeacherName</div>
 
+        <a class="btn btn-light w-100 mb-3 text-start" href="@Url.Action("Dashboard", "Teacher")">
+            Overall Overview
+        </a>
+
         <div class="small text-muted mb-2">Classes</div>
         <ul class="list-unstyled vstack gap-2 mb-3">
             @if (Model.RecentClasses?.Any() == true)
             {
-                foreach (var c in Model.RecentClasses.Take(4))
+                foreach (var c in Model.RecentClasses)
                 {
                     <li>
                         <a class="btn btn-light w-100 text-start d-flex justify-content-between align-items-center"
-                           asp-action="Dashboard" asp-route-classId="@c.Id">
+                           href="@Url.Action("Dashboard", "Teacher", new { classId = c.Id })">
                             <span>@c.Name</span>
                             <span class="badge bg-success-subtle">@c.StudentCount</span>
                         </a>
@@ -27,10 +31,10 @@
             }
         </ul>
 
-        <a class="btn btn-outline-success w-100 mb-2 text-start" asp-action="Create">New Class</a>
-        <a class="btn btn-light w-100 mb-2 text-start" asp-action="Classes">All Classes</a>
-        <a class="btn btn-light w-100 mb-2 text-start" asp-action="Classes" asp-route-archived="true">Archived</a>
-        <a class="btn btn-light w-100 mb-2 text-start" asp-action="Help">Help</a>
-        <a class="btn btn-light w-100 text-start" asp-action="Settings">Settings</a>
+        <a class="btn btn-outline-success w-100 mb-2 text-start" href="@Url.Action("Create", "Teacher")">New Class</a>
+        <a class="btn btn-light w-100 mb-2 text-start" href="@Url.Action("Classes", "Teacher")">All Classes</a>
+        <a class="btn btn-light w-100 mb-2 text-start" href='@Url.Action("Classes", "Teacher", new { archived = true })'>Archived</a>
+        <a class="btn btn-light w-100 mb-2 text-start" href="@Url.Action("Help", "Teacher")">Help</a>
+        <a class="btn btn-light w-100 text-start" href="@Url.Action("Settings", "Teacher")">Settings</a>
     </div>
 </div>

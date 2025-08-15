@@ -5,7 +5,7 @@
 @{
     ViewData["IsAuthPage"] = true;
     ViewData["Title"] = Model.Archived ? "Archived Classes" : "All Classes";
-    var sidebar = (SidebarVm)ViewBag.Sidebar;
+    var sidebar = ViewBag.Sidebar as SidebarVm ?? new SidebarVm();
 }
 <div class="container-xxl py-3">
     <!-- Top bar -->
@@ -17,7 +17,7 @@
     <div class="row g-4">
         <!-- LEFT: Sidebar -->
         <div class="col-12 col-lg-3">
-            @await Html.PartialAsync("~/Views/Shared/_TeacherSidebar.cshtml", sidebar)
+            <partial name="~/Views/Shared/_TeacherSidebar.cshtml" model="sidebar" />
         </div>
 
         <!-- RIGHT: Main content -->
@@ -56,12 +56,16 @@
                                     }
                                     else
                                     {
-                                        <form asp-action="Unarchive" method="post" class="d-inline">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="id" value="@c.Id" />
-                                            <button type="submit" class="btn btn-light btn-sm">Restore Now</button>
-                                        </form>
+                                        @* WHAT IT DOES: Opens the Restore modal for this archived class *@
+                                        <button class="btn btn-light btn-sm"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#confirmRestoreModal"
+                                                data-class-id="@c.Id"
+                                                data-class-name="@c.Name">
+                                            Restore
+                                        </button>
                                     }
+
                                 </div>
                             </div>
                         </div>
@@ -72,7 +76,9 @@
     </div> <!-- /row -->
 </div>
 
-@* Archive confirm (UI only) *@
+@* WHAT IT DOES: Archive + Restore confirmation modals with one script wiring both. *@
+
+@* Archive confirm (kept) *@
 <div class="modal fade" id="confirmArchiveModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4">
@@ -95,16 +101,46 @@
     </div>
 </div>
 
+@* Restore confirm (new) *@
+<div class="modal fade" id="confirmRestoreModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4">
+            <div class="modal-header">
+                <h5 class="modal-title">Restore class</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="Unarchive" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="restoreClassId" />
+                    <p>Are you sure you want to restore <strong id="restoreClassName">this class</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-outline-success">Restore</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
-        // WHAT IT DOES: fills modal with selected class info (UI-only)
+        // WHAT IT DOES: Fills Archive & Restore modals with the clicked class info.
         (() => {
-          const m = document.getElementById('confirmArchiveModal');
-          m?.addEventListener('show.bs.modal', e => {
-            const btn = e.relatedTarget;
-            document.getElementById('archiveClassId').value = btn.getAttribute('data-class-id');
-            document.getElementById('archiveClassName').textContent = btn.getAttribute('data-class-name');
-          });
+            const am = document.getElementById('confirmArchiveModal');
+            am?.addEventListener('show.bs.modal', e => {
+                const btn = e.relatedTarget;
+                document.getElementById('archiveClassId').value = btn.getAttribute('data-class-id');
+                document.getElementById('archiveClassName').textContent = btn.getAttribute('data-class-name');
+            });
+
+            const rm = document.getElementById('confirmRestoreModal');
+            rm?.addEventListener('show.bs.modal', e => {
+                const btn = e.relatedTarget;
+                document.getElementById('restoreClassId').value = btn.getAttribute('data-class-id');
+                document.getElementById('restoreClassName').textContent = btn.getAttribute('data-class-name');
+            });
         })();
     </script>
 }

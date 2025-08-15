@@ -1,0 +1,123 @@
+﻿@* WHAT IT DOES: Renders a single student's overview page (KPIs, concepts, history). *@
+@model Kinemathika.ViewModels.Teacher.StudentOverviewVm
+@using Kinemathika.ViewModels.Teacher
+@{
+    ViewData["IsAuthPage"] = true;
+    ViewData["Title"] = "Student Overview";
+    var sidebar = ViewBag.Sidebar as SidebarVm ?? new SidebarVm();
+}
+<div class="container-xxl py-3">
+    <!-- Top bar -->
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="fw-semibold">Student Overview</div>
+        <a class="btn btn-outline-danger" asp-controller="Account" asp-action="Login">Logout</a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Sidebar -->
+        <div class="col-12 col-lg-3">
+            <partial name="~/Views/Shared/_TeacherSidebar.cshtml" model="sidebar" />
+            <button type="button" class="btn btn-outline-secondary w-100 mt-3" onclick="window.history.back()">Back</button>
+        </div>
+
+        <!-- Main -->
+        <div class="col-12 col-lg-9">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body">
+
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                        <div>
+                            <div class="fw-semibold fs-5">@Model.Name</div>
+                            <div class="text-muted small">@Model.StudentId • @Model.Email</div>
+                        </div>
+                    </div>
+
+                    <!-- KPI row -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3 col-6">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">Attempts</div>
+                                <div class="fs-4 fw-bold">@Model.TotalAttempts</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">Avg Accuracy</div>
+                                <div class="fs-4 fw-bold">@string.Format("{0:P0}", Model.AvgAccuracy)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">First‑Try</div>
+                                <div class="fs-5 fw-semibold">@string.Format("{0:P0}", Model.FirstTryRate)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">Avg Time to Correct</div>
+                                <div class="fs-5 fw-semibold">@Model.AvgTimeToCorrectSec s</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Concept Accuracy -->
+                    <div class="border rounded-3 p-3 mb-3">
+                        <div class="fw-semibold mb-2">Concept Accuracy</div>
+                        <div class="d-flex align-items-end gap-3" style="min-height: 220px;">
+                            @for (int i = 0; i < Model.Concepts.Count; i++)
+                            {
+                                var pct = Model.ConceptAvgAccuracyPct[i];
+                                <div class="text-center">
+                                    <div style="width:48px; height:@pct%; background:#198754; border-radius:.5rem .5rem 0 0;"></div>
+                                    <div class="small mt-1 text-muted" style="width:60px;">@Model.Concepts[i]</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Recent attempts (this student only) -->
+                    <div class="border rounded-3 p-3">
+                        <div class="fw-semibold mb-2">Recent Attempts</div>
+                        @if (Model.RecentAttempts?.Any() == true)
+                        {
+                            <div class="table-responsive rounded-3">
+                                <table class="table align-middle mb-0">
+                                    <thead class="table-success">
+                                        <tr>
+                                            <th>Ended</th>
+                                            <th>Concept</th>
+                                            <th>Problem</th>
+                                            <th>Status</th>
+                                            <th>First Try</th>
+                                            <th>Attempts</th>
+                                            <th>Time (s)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var r in Model.RecentAttempts)
+                                        {
+                                            <tr>
+                                                <td>@r.EndedAt.ToLocalTime()</td>
+                                                <td>@r.ConceptId</td>
+                                                <td>@r.ProblemId</td>
+                                                <td>@r.Status</td>
+                                                <td>@(r.FirstTry ? "Yes" : "No")</td>
+                                                <td>@r.Attempts</td>
+                                                <td>@r.TimeSec</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-light border mb-0">No attempts yet.</div>
+                        }
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
