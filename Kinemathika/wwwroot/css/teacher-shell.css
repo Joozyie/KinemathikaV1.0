@@ -1,0 +1,498 @@
+/* FILE: wwwroot/css/teacher-shell.css
+   WHAT IT DOES: Base teacher shell + green theme (#187C19), clean sidebar,
+   icon-only kebab, class cards, and small utilities. */
+
+/* ===== Tokens ===== */
+:root {
+    --t-bg: #f7f9fb;
+    --t-card: #fff;
+    --t-ink: #1f2937;
+    --t-ink-sub: #6b7280;
+    --t-accent: #2563eb;
+    --t-rail: #ffffff;
+    --t-border: #e5e7eb;
+    --km-green: #187C19;
+}
+
+/* ===== Shell layout ===== */
+.t-shell {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+    background: var(--t-bg);
+    transition: grid-template-columns .2s ease;
+}
+
+.t-appbar {
+    grid-column: 1/3;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #fff;
+    border-bottom: 1px solid var(--t-border);
+}
+
+.t-content {
+    grid-row: 2;
+    grid-column: 2;
+    padding: 1rem 1.25rem;
+}
+
+.t-sidebar {
+    grid-row: 2;
+    grid-column: 1;
+    background: var(--t-rail);
+    border-right: 1px solid var(--t-border);
+    padding: .75rem;
+    overflow: auto;
+    transition: left .2s ease,width .2s ease,padding .2s ease,border .2s ease;
+}
+
+/* Header bits */
+.t-bar {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .5rem 1rem;
+}
+
+.t-icon-btn {
+    background: transparent;
+    border: 0;
+    padding: .5rem;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+    .t-icon-btn:hover {
+        background: #f2f4f7;
+    }
+
+.t-brand {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    color: var(--t-ink);
+}
+
+.t-logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--t-accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+}
+
+.t-brand-text {
+    font-weight: 600;
+}
+
+.t-sep {
+    opacity: .5;
+}
+
+.t-bar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+/* Collapsed (desktop) */
+.t-shell.t-collapsed {
+    grid-template-columns: 0 1fr;
+}
+
+    .t-shell.t-collapsed .t-sidebar {
+        width: 0;
+        padding: 0;
+        border: none;
+        overflow: hidden;
+    }
+
+/* Mobile overlay sidebar */
+@media (max-width:1100px) {
+    .t-shell {
+        grid-template-columns: 72px 1fr;
+    }
+
+    .t-sidebar {
+        width: 260px;
+        position: fixed;
+        left: -300px;
+        top: 56px;
+        bottom: 0;
+        z-index: 110;
+        border-right: 1px solid var(--t-border);
+        background: #fff;
+        box-shadow: none;
+    }
+
+        .t-sidebar.is-open {
+            left: 0;
+            box-shadow: 0 6px 24px rgba(0,0,0,.12);
+        }
+}
+
+/* ===== Theme (green) ===== */
+.t-appbar.appbar-green {
+    background: var(--km-green) !important;
+    border-bottom-color: rgba(255,255,255,.18) !important;
+}
+
+    .t-appbar.appbar-green .t-brand, .t-appbar.appbar-green .t-brand * {
+        color: #fff !important;
+    }
+
+    .t-appbar.appbar-green .t-icon-btn {
+        color: #fff;
+    }
+
+.t-sidebar.sidebar-green {
+    background: var(--km-green) !important;
+    border-right: none !important;
+    color: #fff;
+}
+
+/* ===== Sidebar styling ===== */
+.sidebar-hr {
+    border: 0;
+    border-top: 1px solid rgba(255,255,255,.28);
+    margin: .4rem 0 .7rem;
+}
+
+.teacher-side .side-list {
+    margin: 0;
+    padding: 0;
+}
+
+.teacher-side .side-row {
+    position: relative;
+    list-style: none;
+}
+
+.teacher-side .side-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .55rem .65rem;
+    border-radius: .75rem;
+    text-decoration: none;
+    color: #fff;
+    background: transparent;
+    border: 1px solid transparent;
+}
+
+    .teacher-side .side-link:hover {
+        background: rgba(255,255,255,.10);
+    }
+
+    .teacher-side .side-link.is-active {
+        background: rgba(255,255,255,.18);
+        box-shadow: inset 3px 0 0 rgba(255,255,255,.55);
+    }
+
+.teacher-side .side-badge {
+    background: #d1f7e1;
+    color: #0f5132;
+    font-weight: 600;
+}
+
+/* kebab: icon-only, hidden chrome */
+.kebab-btn {
+    background: transparent !important;
+    border: 0 !important;
+    padding: .25rem;
+    line-height: 1;
+    color: inherit; /* <-- remove forced white */
+    opacity: .85;
+    border-radius: 6px;
+}
+
+    .kebab-btn:hover {
+        opacity: 1;
+        background: transparent !important;
+    }
+
+.side-row .kebab-btn {
+    position: absolute;
+    right: 4px;
+    top: 3px;
+}
+
+/* Buttons (Bootstrap overrides to match theme) */
+.btn-success {
+    background-color: var(--km-green);
+    border-color: var(--km-green);
+}
+
+    .btn-success:hover {
+        filter: brightness(.95);
+    }
+
+.btn-outline-success {
+    color: var(--km-green);
+    border-color: var(--km-green);
+}
+
+    .btn-outline-success:hover {
+        background-color: var(--km-green);
+        border-color: var(--km-green);
+        color: #fff;
+    }
+
+/* ===== “All Classes” cards ===== */
+.km-class-card {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.km-class-head {
+    height: 64px;
+    background: var(--km-head,#187C19);
+    color: #fff;
+    padding: 10px 10px 8px 12px;
+}
+
+.class-title-link {
+    display: inline-block;
+    max-width: 100%;
+}
+
+.kebab-btn {
+    background: transparent;
+    border: 0;
+    padding: 0 .25rem;
+}
+
+.km-class-body {
+    min-height: 110px;
+    background: #fff;
+}
+
+.km-class-foot {
+    height: 48px;
+    border-top: 1px solid #eef1f3;
+    background: #fafbfc;
+}
+
+/* Dark dropdown (works on green backgrounds) */
+.dropdown-menu-dark {
+    background: #1f2937;
+    color: #fff;
+}
+
+    .dropdown-menu-dark .dropdown-item {
+        color: #fff;
+    }
+
+        .dropdown-menu-dark .dropdown-item:hover {
+            background: #374151;
+            color: #fff;
+        }
+
+/* ===== Small utilities ===== */
+.student-list-scroll {
+    max-height: 420px;
+    overflow: auto;
+}
+/* ~10 rows */
+.table-compact th, .table-compact td {
+    padding: .4rem .5rem;
+}
+
+/* WHAT IT DOES: Prevent overlap and clipping; style sidebar row parts */
+
+/* WHAT IT DOES: lets class card be clickable and avoids dropdown clipping */
+.km-class-card {
+    position: relative;
+    overflow: visible;
+}
+
+/* WHAT IT DOES: Layout for link + kebab sitting side-by-side */
+/* WHAT IT DOES: keeps link + kebab on one line, aligned, and clickable */
+.side-row {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+
+.side-link {
+    display: flex;
+    align-items: center;
+    padding: .5rem .75rem;
+    border-radius: .75rem;
+    text-decoration: none;
+    color: #fff;
+    background: rgba(255,255,255,.08);
+}
+
+    .side-link:hover {
+        background: rgba(255,255,255,.14);
+    }
+
+    .side-link.is-active {
+        background: rgba(255,255,255,.18);
+        outline: 2px solid rgba(255,255,255,.22);
+    }
+
+.side-badge {
+    background: #d1f7e1;
+    color: #0f5132;
+    border-radius: 999px;
+    padding: .2rem .5rem;
+}
+
+.sidebar-hr {
+    border-color: rgba(255,255,255,.18);
+    opacity: 1;
+    margin: .5rem 0 .75rem;
+}
+
+/* WHAT IT DOES: Color system + tiles + chart styling to match your theme/screenshot */
+
+/* ---- Theme tokens (tweak if you change branding) ---- */
+:root {
+    --brand-primary: #1b6ec2; /* your primary blue */
+    --brand-primary-dark: #1861ac;
+    --brand-accent: #e4951a; /* orange metric tile */
+    --brand-success: #198754; /* green time/progress */
+    --brand-muted: #d9d9d9; /* light gray ring */
+    --brand-text-on-dark: #ffffff;
+}
+
+/* ---- KPI tiles (blue/orange/green) ---- */
+.kpi-tile {
+    border-radius: .75rem;
+    color: var(--brand-text-on-dark);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 88px;
+}
+
+.kpi-blue {
+    background: var(--brand-primary);
+}
+
+.kpi-orange {
+    background: var(--brand-accent);
+}
+
+.kpi-green {
+    background: var(--brand-success);
+}
+
+.kpi-tile .kpi-label {
+    font-size: .85rem;
+    opacity: .95;
+}
+
+.kpi-tile .kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+/* ---- Cards/section headings to echo screenshot style ---- */
+.section-head {
+    background: var(--brand-primary);
+    color: #fff;
+    border-radius: .5rem .5rem 0 0;
+    padding: .5rem .75rem;
+    font-weight: 600;
+}
+
+/* ---- Donut chart colors ---- */
+#overallDonut .bg,
+#classDonut .bg,
+#studentDonut .bg {
+    fill: var(--brand-muted);
+}
+
+#overallDonut .fg,
+#classDonut .fg,
+#studentDonut .fg {
+    fill: var(--brand-success);
+}
+
+/* ---- Line chart colors (Attempts/Time) ---- */
+svg .chart-line {
+    stroke: var(--brand-primary);
+}
+
+svg .chart-line-time {
+    stroke: var(--brand-success);
+}
+
+svg .chart-line, svg .chart-line-time {
+    fill: none;
+    stroke-width: 2;
+}
+
+svg .chart-dot {
+    fill: var(--brand-primary);
+}
+
+svg .chart-dot-time {
+    fill: var(--brand-success);
+}
+
+/* ---- Bars (concept accuracy) ---- */
+#conceptBar rect,
+#studentConceptBar rect {
+    fill: var(--brand-success);
+}
+
+/* ---- Small layout niceties ---- */
+.student-scroll {
+    max-height: 420px;
+}
+
+.btn-primary, .nav-pills .nav-link.active {
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary-dark);
+}
+
+/* charts */
+.chart-line, .chart-line-time {
+    fill: none;
+    stroke: #0d6efd;
+    stroke-width: 2px;
+}
+
+.chart-dot, .chart-dot-time {
+    fill: #0d6efd;
+}
+
+/* donut colors */
+#mainDonut .bg {
+    fill: #e9ecef;
+}
+
+#mainDonut .fg {
+    fill: #198754;
+}
+
+#overallDonut .bg, #classDonut .bg {
+    fill: #e9ecef;
+}
+
+#overallDonut .fg, #classDonut .fg {
+    fill: #198754;
+}
+
+/* make SVG responsive if you like */
+#conceptTrend svg, #conceptBars svg {
+    width: 100%;
+    height: 320px;
+}
+
+

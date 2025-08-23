@@ -87,8 +87,6 @@
 }
 
 .teacher-create {
-    position: relative;
-    z-index: 1;
     margin-bottom: 5rem; /* lift content away from rocket base */
 }
 
@@ -240,9 +238,27 @@
 
 /* Settings rocket illustration (right side) */
 .settings-rocket {
-    background: url("/img/class-rocket.png") no-repeat right bottom / contain;
+    background: url("/img/class-rocket.png") no-repeat right bottom;
     width: 100%;
     height: clamp(320px, 48vh, 560px);
     filter: drop-shadow(0 16px 42px rgba(0,0,0,.12));
     opacity: 0.95;
 }
+
+/* WHAT IT DOES: Limit student tables to about 10 rows and make them scroll */
+.student-scroll {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+/* WHAT IT DOES: subtle active highlight for sidebar items */
+.teacher-side .btn.is-active {
+    border-color: #198754 !important; /* bootstrap success */
+    background: rgba(25, 135, 84, .10) !important; /* success-subtle */
+    box-shadow: inset 3px 0 0 #198754; /* left accent bar */
+    color: #0f5132;
+}
+
+    .teacher-side .btn.is-active .badge {
+        background-color: rgba(25, 135, 84, .15);
+    }

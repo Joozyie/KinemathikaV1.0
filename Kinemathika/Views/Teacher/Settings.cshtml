@@ -1,61 +1,50 @@
-﻿@* Views/Teacher/Settings.cshtml — Settings with left sidebar *@
-@* WHAT IT DOES: Adds left sidebar; right side shows personal details + change password modal *@
+﻿@* WHAT IT DOES: Uses the Teacher shell; keeps your form + modal exactly the same. *@
 @model Kinemathika.ViewModels.Teacher.SettingsVm
 @using Kinemathika.ViewModels.Teacher
 @{
     ViewData["IsAuthPage"] = true;
-    ViewData["Title"] = "Settings";
-    var sidebar = (SidebarVm)ViewBag.Sidebar;
+    ViewData["Title"] = "Settings";                    // breadcrumb text
+    Layout = "~/Views/Shared/_TeacherLayout.cshtml";   // <-- use new shell
 }
-<div class="container-xxl py-3">
-    <!-- Top bar -->
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div class="fw-semibold">Settings</div>
-        <a class="btn btn-outline-danger" asp-controller="Account" asp-action="Logout">Logout</a>
-    </div>
+@section PageTitle {
+    <div class="fw-semibold">Settings</div>
+}
+@section PageActions {
+    @* optional page buttons *@
+}
 
-    <div class="row g-4">
-        <!-- LEFT: Sidebar -->
-        <div class="col-12 col-lg-3">
-            @await Html.PartialAsync("~/Views/Shared/_TeacherSidebar.cshtml", sidebar)
-        </div>
-
-        <!-- RIGHT: Settings form -->
-        <div class="col-12 col-lg-9">
-            <div class="card border-0 shadow-sm rounded-4">
-                <div class="card-body">
-                    <h6 class="text-muted mb-3">Personal Details</h6>
-                    <form asp-action="Settings" method="post" class="row g-3">
-                        @Html.AntiForgeryToken()
-                        <div class="col-md-6">
-                            <label asp-for="FirstName" class="form-label">First Name</label>
-                            <input asp-for="FirstName" class="form-control" />
-                            <span asp-validation-for="FirstName" class="text-danger small"></span>
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="LastName" class="form-label">Last Name</label>
-                            <input asp-for="LastName" class="form-control" />
-                            <span asp-validation-for="LastName" class="text-danger small"></span>
-                        </div>
-                        <div class="col-12">
-                            <label asp-for="Email" class="form-label">Email Address</label>
-                            <input asp-for="Email" class="form-control" />
-                            <span asp-validation-for="Email" class="text-danger small"></span>
-                        </div>
-                        <div class="col-12">
-                            <button class="btn btn-success">Save Changes</button>
-                            <button class="btn btn-outline-success ms-2" data-bs-toggle="modal" data-bs-target="#changePwdModal" type="button">
-                                Change Password
-                            </button>
-                        </div>
-                    </form>
-                </div>
+@* ---- Your original settings card (unchanged) ---- *@
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+        <h6 class="text-muted mb-3">Personal Details</h6>
+        <form asp-action="Settings" method="post" class="row g-3">
+            @Html.AntiForgeryToken()
+            <div class="col-md-6">
+                <label asp-for="FirstName" class="form-label">First Name</label>
+                <input asp-for="FirstName" class="form-control" />
+                <span asp-validation-for="FirstName" class="text-danger small"></span>
             </div>
-        </div> <!-- /RIGHT -->
+            <div class="col-md-6">
+                <label asp-for="LastName" class="form-label">Last Name</label>
+                <input asp-for="LastName" class="form-control" />
+                <span asp-validation-for="LastName" class="text-danger small"></span>
+            </div>
+            <div class="col-12">
+                <label asp-for="Email" class="form-label">Email Address</label>
+                <input asp-for="Email" class="form-control" />
+                <span asp-validation-for="Email" class="text-danger small"></span>
+            </div>
+            <div class="col-12">
+                <button class="btn btn-success">Save Changes</button>
+                <button class="btn btn-outline-success ms-2" data-bs-toggle="modal" data-bs-target="#changePwdModal" type="button">
+                    Change Password
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
-<!-- Change Password Modal (unchanged UI-only) -->
+@* ---- Change Password Modal (unchanged) ---- *@
 <div class="modal fade" id="changePwdModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4">

@@ -23,4 +23,5 @@ namespace Kinemathika.ViewModels.Teacher
         // History (latest attempts for this student)
         public List<RecentAttemptRow> RecentAttempts { get; set; } = new();
     }
+
 }

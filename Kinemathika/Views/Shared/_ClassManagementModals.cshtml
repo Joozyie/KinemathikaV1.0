@@ -1,0 +1,83 @@
+﻿@* WHAT IT DOES: Forces archive modal body text to black; keeps rename modal label black. *@
+@{
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
+}
+
+<!-- Edit (rename) -->
+<form method="post" asp-controller="Teacher" asp-action="RenameClass">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="clsSetId" />
+    <input type="hidden" name="returnUrl" value="@returnUrl" />
+    <div class="modal fade" id="classSettingsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Class</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="clsSetName" class="form-label text-dark fw-semibold">Change Class Name</label>
+                    <input name="newName" id="clsSetName" class="form-control" maxlength="80"
+                           placeholder="Class name" required />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Archive -->
+<form method="post" asp-controller="Teacher" asp-action="Archive">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="clsArcId" />
+    <input type="hidden" name="returnUrl" value="@returnUrl" />
+    <div class="modal fade" id="classArchiveModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4">
+                <div class="modal-header">
+                    <h5 class="modal-title">Archive Class</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-dark">
+                    <p class="mb-2">This will move <strong id="clsArcName"></strong> to Archived.</p>
+                    <p class="small mb-2">Type the class name to confirm.</p>
+                    <input class="form-control" id="clsArcConfirm" name="confirmName"
+                           placeholder="Type class name" required />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" id="clsArcBtn" class="btn btn-outline-danger" disabled>Archive</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+    (() => {
+      const setModal = document.getElementById('classSettingsModal');
+      setModal?.addEventListener('show.bs.modal', e => {
+        const btn = e.relatedTarget;
+        document.getElementById('clsSetId').value   = btn.getAttribute('data-class-id');
+        document.getElementById('clsSetName').value = btn.getAttribute('data-class-name') || '';
+      });
+
+      const arcModal = document.getElementById('classArchiveModal');
+      arcModal?.addEventListener('show.bs.modal', e => {
+        const btn  = e.relatedTarget;
+        const name = btn.getAttribute('data-class-name') || '';
+        document.getElementById('clsArcId').value = btn.getAttribute('data-class-id');
+        document.getElementById('clsArcName').textContent = name;
+
+        const inp = document.getElementById('clsArcConfirm');
+        const go  = document.getElementById('clsArcBtn');
+        inp.value = ''; go.disabled = true;
+        const check = () => { go.disabled = (inp.value.trim() !== name); };
+        inp.removeEventListener('input', check);
+        inp.addEventListener('input', check);
+      });
+    })();
+</script>

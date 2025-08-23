@@ -1,0 +1,17 @@
+﻿@* WHAT IT DOES: Compact HeaderBar with green theme + breadcrumbs + menu toggle. *@
+@{
+    var title = ViewData["Title"]?.ToString() ?? "Dashboard";
+}
+<nav class="t-appbar appbar-green d-flex align-items-center justify-content-between px-2">
+    <div class="d-flex align-items-center gap-2">
+        <button id="t-menu-btn" class="btn btn-link text-white px-2" type="button" title="Toggle menu">
+            <i class="bi bi-list fs-5"></i>
+        </button>
+        <div class="d-flex align-items-center gap-2">
+            <div class="fw-semibold text-white">Kinemathika Classroom</div>
+            <span class="text-white-50">›</span>
+            <div class="text-white-75">@title</div>
+        </div>
+    </div>
+    <a class="btn btn-outline-light btn-sm" asp-controller="Account" asp-action="Logout">Logout</a>
+</nav>

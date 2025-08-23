@@ -1,8 +1,8 @@
-﻿// Controllers/TeacherController.cs
-// WHAT IT DOES: Uses EF to fill sidebar + Classes list from your DB.
+﻿// WHAT IT DOES: Teacher dashboard + classes + student details + student CRUD,
+// PLUS class RenameClass, Archive (with confirmName), Unarchive, and returnUrl redirects.
 using Kinemathika.Data;
-using Kinemathika.Models.Analytics;
 using Kinemathika.ViewModels.Teacher;
+using Kinemathika.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
@@ -14,8 +14,7 @@ namespace Kinemathika.Controllers
         private readonly AppDbContext _db;
         public TeacherController(AppDbContext db) => _db = db;
 
-        // --- helper: map classrooms to cards (active or archived) ---
-        // WHAT IT DOES: builds ClassCardVm list with StudentCount + avg accuracy/time.
+        // ---------- Sidebar helpers ----------
         private async Task<List<ClassCardVm>> GetClassCardsAsync(bool archived)
         {
             var raw = await _db.Classrooms
@@ -26,30 +25,23 @@ namespace Kinemathika.Controllers
                     c.Id,
                     c.Name,
                     StudentCount = c.Enrollments.Count(),
-
-                    // Avg accuracy across attempts of students enrolled in this class
                     AvgAcc = (double?)(
                         from e in _db.Enrollments
                         where e.ClassroomId == c.Id
-                        join a in _db.AttemptRecords
-                            on e.Student.StudentId equals a.student_id
+                        join a in _db.AttemptRecords on e.Student.StudentId equals a.student_id
                         select a.level_attempt_accuracy
                     ).Average(),
-
-                    // Avg time-to-correct (ms) for correct attempts for these students
-                    // Avg time-to-correct (ms) for correct attempts for these students
                     AvgMs = (double?)(
                         from e in _db.Enrollments
                         where e.ClassroomId == c.Id
                         join a in _db.AttemptRecords on e.Student.StudentId equals a.student_id
-                        where a.ended_status == "correct"    // ← was: a.ended_status = AttemptEndedStatus.correct
+                        where a.ended_status == "correct"
                         select a.time_to_correct_ms
                     ).Average()
                 })
                 .OrderBy(x => x.Name)
                 .ToListAsync();
 
-            // shape into the VM the views expect
             return raw.Select(x => new ClassCardVm
             {
                 Id = x.Id,
@@ -60,8 +52,6 @@ namespace Kinemathika.Controllers
             }).ToList();
         }
 
-        // Controllers/TeacherController.cs (helper)
-        // what it does: loads up to 4 non-archived classes + student counts for the sidebar
         private async Task<SidebarVm> BuildSidebarAsync()
         {
             var recent = await _db.Classrooms
@@ -84,18 +74,15 @@ namespace Kinemathika.Controllers
             };
         }
 
-
-        // GET /Teacher  → redirect to dashboard
         [HttpGet]
         public IActionResult Index() => RedirectToAction(nameof(Dashboard));
 
-        // GET /Teacher/Dashboard
+        // ---------- Dashboard ----------
         [HttpGet]
         public async Task<IActionResult> Dashboard(int? classId = null)
         {
             ViewBag.Sidebar = await BuildSidebarAsync();
 
-            // --- determine scope (overall or by class) ---
             IQueryable<string> studentIdsQuery;
             string? className = null;
 
@@ -106,7 +93,7 @@ namespace Kinemathika.Controllers
                     .Select(c => c.Name)
                     .FirstOrDefaultAsync();
 
-                if (className == null) classId = null; // fallback to overall if not found
+                if (className == null) classId = null;
             }
 
             if (classId.HasValue)
@@ -125,12 +112,9 @@ namespace Kinemathika.Controllers
             }
 
             var studentIds = await studentIdsQuery.Distinct().ToListAsync();
-
-            // --- attempts (filtered) ---
             var attempts = _db.AttemptRecords.AsNoTracking();
             var filteredAttempts = attempts.Where(a => studentIds.Contains(a.student_id));
 
-            // --- aggregates for KPIs from filtered set ---
             var agg = await filteredAttempts.GroupBy(_ => 1)
                 .Select(g => new
                 {
@@ -163,11 +147,10 @@ namespace Kinemathika.Controllers
                 .OrderBy(x => x.concept)
                 .ToListAsync();
 
-            // --- student directory + per-student stats (filtered) ---
             var studentsInfo = await _db.Students
                 .AsNoTracking()
                 .Where(s => studentIds.Contains(s.StudentId))
-                .Select(s => new { s.StudentId, s.Name, s.Email })
+                .Select(s => new { s.StudentId, s.Name, s.Email, s.Id })
                 .ToListAsync();
 
             var byStudent = await filteredAttempts
@@ -181,7 +164,6 @@ namespace Kinemathika.Controllers
                 })
                 .ToListAsync();
 
-            // --- build Overall tabs (one per active class) ONLY when overall ---
             var tabs = new List<ClassStudentsVm>();
             if (!classId.HasValue)
             {
@@ -192,7 +174,7 @@ namespace Kinemathika.Controllers
                     .Select(c => new { c.Id, c.Name })
                     .ToListAsync();
 
-                var directory = studentsInfo; // already loaded for overall set
+                var directory = studentsInfo;
                 var statsById = byStudent.ToDictionary(x => x.StudentId, x => x);
 
                 foreach (var cls in activeClasses)
@@ -232,7 +214,6 @@ namespace Kinemathika.Controllers
                 }
             }
 
-            // --- flat Students list (used for Class Overview table) ---
             var studentRows = studentsInfo
                 .GroupJoin(byStudent, s => s.StudentId, a => a.StudentId, (s, g) => new { s, stat = g.FirstOrDefault() })
                 .Select(x => new StudentRowVm
@@ -248,7 +229,23 @@ namespace Kinemathika.Controllers
                 .ThenBy(r => r.Name)
                 .ToList();
 
-            // --- Overview section; only load RecentAttempts for Overall ---
+            // recent attempts for BOTH overall and class view
+            var recentAttempts = await filteredAttempts
+                .OrderByDescending(a => a.ended_at)
+                .Take(10)
+                .Select(a => new RecentAttemptRow
+                {
+                    StudentId = a.student_id,
+                    ConceptId = a.concept_id,
+                    ProblemId = a.problem_id,
+                    Status = a.ended_status,
+                    FirstTry = a.first_attempt_correct,
+                    Attempts = a.attempts_to_correct,
+                    TimeSec = Math.Round(a.time_to_correct_ms / 1000.0, 1),
+                    EndedAt = a.ended_at
+                })
+                .ToListAsync();
+
             var overview = new TeacherOverviewVm
             {
                 TotalStudents = agg.DistinctStudents,
@@ -260,26 +257,9 @@ namespace Kinemathika.Controllers
                 Concepts = byConcept.Select(x => x.concept).ToList(),
                 ConceptAvgAccuracyPct = byConcept.Select(x => x.avgAccPct).ToList(),
                 ConceptAvgAttempts = byConcept.Select(x => Math.Round(x.avgAttempts, 2)).ToList(),
-                RecentAttempts = classId.HasValue
-                    ? new List<RecentAttemptRow>() // hide on class view
-                    : await attempts
-                        .OrderByDescending(a => a.ended_at)
-                        .Take(10)
-                        .Select(a => new RecentAttemptRow
-                        {
-                            StudentId = a.student_id,
-                            ConceptId = a.concept_id,
-                            ProblemId = a.problem_id,
-                            Status = a.ended_status,
-                            FirstTry = a.first_attempt_correct,
-                            Attempts = a.attempts_to_correct,
-                            TimeSec = Math.Round(a.time_to_correct_ms / 1000.0, 1),
-                            EndedAt = a.ended_at
-                        })
-                        .ToListAsync()
+                RecentAttempts = recentAttempts
             };
 
-            // --- build VM (note: StudentTabs uses local 'tabs') ---
             var vm = new TeacherDashboardVm
             {
                 TeacherName = "Prof. Jane Doe",
@@ -298,7 +278,7 @@ namespace Kinemathika.Controllers
             return View(vm);
         }
 
-        // WHAT IT DOES: Shows a single student's overview (KPIs, concept stats, history).
+        // ---------- Student Overview ----------
         [HttpGet]
         public async Task<IActionResult> Student(string studentId)
         {
@@ -307,7 +287,6 @@ namespace Kinemathika.Controllers
 
             ViewBag.Sidebar = await BuildSidebarAsync();
 
-            // Directory info
             var s = await _db.Students
                 .AsNoTracking()
                 .Where(x => x.StudentId == studentId)
@@ -316,10 +295,8 @@ namespace Kinemathika.Controllers
 
             if (s is null) { TempData["Toast"] = "Student not found."; return RedirectToAction(nameof(Dashboard)); }
 
-            // Attempts for this student
             var attempts = _db.AttemptRecords.AsNoTracking().Where(a => a.student_id == studentId);
 
-            // KPIs
             var agg = await attempts.GroupBy(_ => 1)
                 .Select(g => new
                 {
@@ -332,7 +309,6 @@ namespace Kinemathika.Controllers
                 })
                 .FirstOrDefaultAsync() ?? new { TotalAttempts = 0, AvgAccuracy = 0m, AvgCorrectMs = 0.0, FirstTry = 0, Mastery = 0 };
 
-            // Concept breakdown for this student
             var byConcept = await attempts
                 .GroupBy(a => a.concept_id)
                 .Select(g => new
@@ -344,7 +320,6 @@ namespace Kinemathika.Controllers
                 .OrderBy(x => x.concept)
                 .ToListAsync();
 
-            // Recent attempts (this student only)
             var recent = await attempts
                 .OrderByDescending(a => a.ended_at)
                 .Take(25)
@@ -361,7 +336,7 @@ namespace Kinemathika.Controllers
                 })
                 .ToListAsync();
 
-            var total = Math.Max(1, agg.TotalAttempts); // avoid div0
+            var total = Math.Max(1, agg.TotalAttempts);
 
             var vm = new StudentOverviewVm
             {
@@ -382,8 +357,96 @@ namespace Kinemathika.Controllers
             return View(vm);
         }
 
-        // GET /Teacher/Classes?archived=true|false
-        // WHAT IT DOES: lists active (default) or archived classes with counts/stats.
+        // ---------- Student CRUD (unchanged from your working version) ----------
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateStudent(int? classId, string name, string email, bool isActive = true)
+        {
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email))
+                return RedirectToAction(nameof(Dashboard), new { classId });
+
+            var student = await _db.Students.FirstOrDefaultAsync(s => s.Email == email);
+            if (student == null)
+            {
+                var newId = "stu_" + Guid.NewGuid().ToString("N")[..6];
+                student = new Student { StudentId = newId, Name = name.Trim(), Email = email.Trim() };
+                _db.Students.Add(student);
+                await _db.SaveChangesAsync();
+            }
+            else
+            {
+                student.Name = name.Trim();
+                await _db.SaveChangesAsync();
+            }
+
+            if (classId.HasValue)
+            {
+                bool hasEnroll = await _db.Enrollments.AnyAsync(e => e.ClassroomId == classId.Value && e.StudentDbId == student.Id);
+                if (!hasEnroll)
+                {
+                    _db.Enrollments.Add(new Enrollment { ClassroomId = classId.Value, StudentDbId = student.Id });
+                    await _db.SaveChangesAsync();
+                }
+            }
+
+            return RedirectToAction(nameof(Dashboard), new { classId });
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditStudent(string id, int? classId, string name, string email, bool isActive = true)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return RedirectToAction(nameof(Dashboard), new { classId });
+
+            var s = await _db.Students.FirstOrDefaultAsync(x => x.StudentId == id);
+            if (s == null) return RedirectToAction(nameof(Dashboard), new { classId });
+
+            s.Name = (name ?? "").Trim();
+            s.Email = (email ?? "").Trim();
+            await _db.SaveChangesAsync();
+
+            if (classId.HasValue)
+            {
+                bool hasEnroll = await _db.Enrollments.AnyAsync(e => e.ClassroomId == classId.Value && e.StudentDbId == s.Id);
+                if (!hasEnroll)
+                {
+                    _db.Enrollments.Add(new Enrollment { ClassroomId = classId.Value, StudentDbId = s.Id });
+                    await _db.SaveChangesAsync();
+                }
+            }
+
+            return RedirectToAction(nameof(Dashboard), new { classId });
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteStudent(string id, int? classId)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return RedirectToAction(nameof(Dashboard), new { classId });
+
+            var s = await _db.Students.FirstOrDefaultAsync(x => x.StudentId == id);
+            if (s == null) return RedirectToAction(nameof(Dashboard), new { classId });
+
+            if (classId.HasValue)
+            {
+                var enroll = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == classId.Value && e.StudentDbId == s.Id);
+                if (enroll != null)
+                {
+                    _db.Enrollments.Remove(enroll);
+                    await _db.SaveChangesAsync();
+                }
+            }
+            else
+            {
+                var allEnroll = _db.Enrollments.Where(e => e.StudentDbId == s.Id);
+                _db.Enrollments.RemoveRange(allEnroll);
+                _db.Students.Remove(s);
+                await _db.SaveChangesAsync();
+            }
+
+            return RedirectToAction(nameof(Dashboard), new { classId });
+        }
+
+        // ---------- Classes list ----------
         [HttpGet]
         public async Task<IActionResult> Classes(bool archived = false)
         {
@@ -398,8 +461,8 @@ namespace Kinemathika.Controllers
                     Id = c.Id,
                     Name = c.Name,
                     StudentCount = _db.Enrollments.Count(e => e.ClassroomId == c.Id),
-                    AverageAccuracy = 0m,        // placeholder if you don’t compute it yet
-                    AvgTimeSpent = ""            // placeholder
+                    AverageAccuracy = 0m,
+                    AvgTimeSpent = ""
                 })
                 .ToListAsync();
 
@@ -412,16 +475,55 @@ namespace Kinemathika.Controllers
             return View(vm);
         }
 
-        // POST stubs keep your buttons working
+        // ---------- Class management (rename/archive/unarchive) ----------
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Archive(int id)
+        public async Task<IActionResult> RenameClass(int id, string newName, string? returnUrl)
+        {
+            if (string.IsNullOrWhiteSpace(newName))
+            {
+                TempData["Toast"] = "Class name is required.";
+                return SafeBack(returnUrl, nameof(Classes));
+            }
+
+            var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == id);
+            if (cls == null)
+            {
+                TempData["Toast"] = "Class not found.";
+                return SafeBack(returnUrl, nameof(Classes));
+            }
+
+            // Optional: avoid duplicates under the same teacher scope if you track that
+            var exists = await _db.Classrooms
+                .AnyAsync(c => c.Id != id && c.Name.ToLower() == newName.Trim().ToLower());
+            if (exists)
+            {
+                TempData["Toast"] = "A class with that name already exists.";
+                return SafeBack(returnUrl, nameof(Classes));
+            }
+
+            cls.Name = newName.Trim();
+            await _db.SaveChangesAsync();
+            TempData["Toast"] = "Class renamed.";
+            return SafeBack(returnUrl, nameof(Classes));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Archive(int id, string? confirmName, string? returnUrl)
         {
             var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == id);
             if (cls == null)
             {
                 TempData["Toast"] = "Class not found.";
-                return RedirectToAction(nameof(Classes));
+                return SafeBack(returnUrl, nameof(Classes));
+            }
+
+            // Require correct confirm name (case sensitive to match modal UX)
+            if (!string.Equals(cls.Name, confirmName ?? string.Empty, StringComparison.Ordinal))
+            {
+                TempData["Toast"] = "Name confirmation does not match.";
+                return SafeBack(returnUrl, nameof(Classes));
             }
 
             if (!cls.IsArchived)
@@ -430,24 +532,18 @@ namespace Kinemathika.Controllers
                 await _db.SaveChangesAsync();
                 TempData["Toast"] = $"Archived: {cls.Name}";
             }
-            else
-            {
-                TempData["Toast"] = "Class is already archived.";
-            }
-
-            // After archiving, keep user on All Classes (active list)
-            return RedirectToAction(nameof(Classes), new { archived = false });
+            return SafeBack(returnUrl, nameof(Classes), new { archived = false });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Unarchive(int id)
+        public async Task<IActionResult> Unarchive(int id, string? returnUrl)
         {
             var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == id);
             if (cls == null)
             {
                 TempData["Toast"] = "Class not found.";
-                return RedirectToAction(nameof(Classes), new { archived = true });
+                return SafeBack(returnUrl, nameof(Classes), new { archived = true });
             }
 
             if (cls.IsArchived)
@@ -456,16 +552,16 @@ namespace Kinemathika.Controllers
                 await _db.SaveChangesAsync();
                 TempData["Toast"] = $"Restored: {cls.Name}";
             }
-            else
-            {
-                TempData["Toast"] = "Class is already active.";
-            }
-
-            // After restoring, show All Classes so the card appears there
-            return RedirectToAction(nameof(Classes), new { archived = false });
+            return SafeBack(returnUrl, nameof(Classes), new { archived = false });
         }
 
-        // Wizard + Settings + Help remain the same; we only add the sidebar.
+        // Small helper to safely redirect back
+        private IActionResult SafeBack(string? returnUrl, string fallbackAction, object? routeValues = null)
+            => (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                ? Redirect(returnUrl!)
+                : RedirectToAction(fallbackAction, routeValues);
+
+        // ---------- Wizard/Settings/Help ----------
         [HttpGet]
         public async Task<IActionResult> Create() { ViewBag.Sidebar = await BuildSidebarAsync(); return View(new CreateClassStep1Vm()); }
 
@@ -485,8 +581,7 @@ namespace Kinemathika.Controllers
             return View(new CreateClassStep2Vm { ClassName = className, Students = new() });
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Assign(CreateClassStep2Vm vm, string? action)
             => RedirectToAction(nameof(Dashboard));
 

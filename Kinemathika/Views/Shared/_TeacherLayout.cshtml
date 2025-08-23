@@ -1,0 +1,31 @@
+﻿@* WHAT IT DOES: Teacher shell (Classroom-style) with green header + sidebar.
+   FIX: renders @section Scripts so pages (Dashboard, Classes, Student, etc.) can
+   define @section Scripts without throwing. *@
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<link rel="stylesheet" href="~/css/teacher-shell.css" asp-append-version="true" />
+<script defer src="~/js/teacher-shell.js"></script>
+
+<div class="t-shell">
+    <header class="t-appbar appbar-green">
+        <partial name="~/Views/Shared/_HeaderBar.cshtml" />
+    </header>
+
+    <aside id="t-sidebar" class="t-sidebar sidebar-green">
+        <partial name="~/Views/Shared/_TeacherSidebar.cshtml" model="ViewBag.Sidebar" />
+    </aside>
+
+    <main id="t-content" class="t-content">
+        <div class="t-page-head">
+            <div class="t-title">@RenderSection("PageTitle", required: false)</div>
+            <div class="t-actions">@RenderSection("PageActions", required: false)</div>
+        </div>
+        <div class="t-page-body">
+            @RenderBody()
+        </div>
+    </main>
+</div>
+
+@* IMPORTANT: allow pages to push scripts *@
+@RenderSection("Scripts", required: false)
