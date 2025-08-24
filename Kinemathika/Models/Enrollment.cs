@@ -5,9 +5,10 @@ namespace Kinemathika.Models
     public class Enrollment
     {
         public int ClassroomId { get; set; }
-        public Classroom Classroom { get; set; } = default!;
+        public string StudentId { get; set; } = string.Empty;
 
-        public int StudentDbId { get; set; }
+        // Navs
+        public Classroom Classroom { get; set; } = default!;
         public Student Student { get; set; } = default!;
     }
 }

@@ -1,7 +1,8 @@
-﻿// Models/Analytics/AttemptRecord.cs
-// WHAT IT DOES: maps 1:1 to dbo.AttemptRecords columns
+﻿// WHAT IT DOES: EF entity mapping 1:1 to dbo.AttemptRecords (new schema).
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel;
+using Kinemathika.Models; // for Classroom/Student navs
 
 namespace Kinemathika.Models.Analytics
 {
@@ -9,46 +10,35 @@ namespace Kinemathika.Models.Analytics
     public class AttemptRecord
     {
         [Key]
-        public int id { get; set; }
+        [Column("attempt_id")]
+        public long AttemptId { get; set; } // BIGINT IDENTITY
+
+        [Column("class_id")]
+        public int ClassId { get; set; }
 
         [Column("student_id")]
-        public string student_id { get; set; } = "";
-
-        [Column("session_id")]
-        public string session_id { get; set; } = "";
+        [MaxLength(20)]
+        public string StudentId { get; set; } = string.Empty;
 
         [Column("concept_id")]
-        public string concept_id { get; set; } = "";
-
-        [Column("worksheet_id")]
-        public string worksheet_id { get; set; } = "";
-
-        [Column("problem_id")]
-        public string problem_id { get; set; } = "";
-
-        [Column("started_at")]
-        public DateTime started_at { get; set; }
-
-        [Column("ended_at")]
-        public DateTime ended_at { get; set; }
-
-        // Store as string in DB; we’ll read it as string for simplicity
-        [Column("ended_status")]
-        public string ended_status { get; set; } = "";
-
-        [Column("first_attempt_correct")]
-        public bool first_attempt_correct { get; set; }
+        [MaxLength(10)]
+        [DefaultValue("")]
+        public string ConceptId { get; set; } = string.Empty; // 'dd'|'sv'|'acc'
 
         [Column("attempts_to_correct")]
-        public int attempts_to_correct { get; set; }
-
-        [Column("level_attempt_accuracy")]
-        public double level_attempt_accuracy { get; set; }
+        public int AttemptsToCorrect { get; set; }
 
         [Column("time_to_correct_ms")]
-        public int time_to_correct_ms { get; set; }
+        public int TimeToCorrectMs { get; set; }
 
-        [Column("mastery_valid")]
-        public bool mastery_valid { get; set; }
+        [Column("ended_at")]
+        public DateTime EndedAt { get; set; }
+      
+        [Column("problem_no")] 
+        public byte ProblemNo { get; set; } // 1..15
+
+        // --- Navigation properties ---
+        public Classroom Class { get; set; } = default!;
+        public Student Student { get; set; } = default!;
     }
 }

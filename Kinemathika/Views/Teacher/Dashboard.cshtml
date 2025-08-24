@@ -99,7 +99,7 @@ else
     <div class="card-body">
         <div class="row g-4 align-items-start">
             <div class="col-12 col-xl-5">
-                <div class="fw-semibold mb-2">@((Model.IsOverall) ? "Overall Mastery" : "Class Progress")</div>
+                <div class="fw-semibold mb-2">@((Model.IsOverall) ? "Overall Progress" : "Class Progress")</div>
                 <div id="progressDonut"
                      data-completed="@((int)Math.Round(((Model.Overview?.MasteryRate ?? 0m) * 100)))"
                      style="min-height:280px;"></div>

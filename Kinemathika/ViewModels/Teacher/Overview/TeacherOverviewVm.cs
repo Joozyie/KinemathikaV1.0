@@ -15,15 +15,4 @@ namespace Kinemathika.ViewModels.Teacher
         public List<RecentAttemptRow> RecentAttempts { get; set; } = new();
     }
 
-    public class RecentAttemptRow
-    {
-        public string StudentId { get; set; } = "";
-        public string ConceptId { get; set; } = "";
-        public string ProblemId { get; set; } = "";
-        public string Status { get; set; } = "";
-        public bool FirstTry { get; set; }
-        public int Attempts { get; set; }
-        public double TimeSec { get; set; }
-        public DateTime EndedAt { get; set; }
-    }
 }

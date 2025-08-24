@@ -1,11 +1,14 @@
-﻿@* Student Overview — aligned with Class UI (tiles ➜ donut+insights ➜ bars ➜ recent) *@
+﻿@* WHAT IT DOES: Student Overview UI using Progress donut + Avg Attempts tile + full concept labels. *@
 @model Kinemathika.ViewModels.Teacher.StudentOverviewVm
-@using Kinemathika.ViewModels.Teacher
+@using System.Text.Json
 
 @{
     ViewData["IsAuthPage"] = true;
     ViewData["Title"] = "Student Overview";
     Layout = "~/Views/Shared/_TeacherLayout.cshtml";
+    var masteryPct = (int)Math.Round(Model.MasteryRate * 100m); // now "Progress" %
+    var conceptLabelsJson = JsonSerializer.Serialize(Model.Concepts ?? new List<string>());
+    var conceptBarsJson = JsonSerializer.Serialize(Model.ConceptAvgAccuracyPct ?? new List<int>());
 }
 
 @section PageTitle {
@@ -18,7 +21,6 @@
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body">
 
-        <!-- Header -->
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
             <div>
                 <div class="fw-semibold fs-5">@Model.Name</div>
@@ -26,49 +28,43 @@
             </div>
         </div>
 
-        <!-- ===== KPI tiles (same layout as class) ===== -->
         <div class="row g-3 mb-3">
             <div class="col-12 col-lg-4">
                 <div class="kpi-tile kpi-blue">
-                    <div class="kpi-label">Total Attempts</div>
+                    <div class="kpi-label">Attempts (in view)</div>
                     <div class="kpi-value">@Model.TotalAttempts</div>
                 </div>
             </div>
             <div class="col-12 col-lg-4">
                 <div class="kpi-tile kpi-orange">
-                    <div class="kpi-label">Avg Accuracy</div>
-                    <div class="kpi-value">@string.Format("{0:P0}", Model.AvgAccuracy)</div>
+                    <div class="kpi-label">Avg Attempts</div>
+                    <div class="kpi-value">@Model.AvgAttemptsToCorrect.ToString("0.00")</div>
                 </div>
             </div>
             <div class="col-12 col-lg-4">
                 <div class="kpi-tile kpi-green">
                     <div class="kpi-label">Avg Time to Correct</div>
-                    <div class="kpi-value">@Model.AvgTimeToCorrectSec s</div>
+                    <div class="kpi-value">@Model.AvgTimeToCorrectSec.ToString("0.0") s</div>
                 </div>
             </div>
         </div>
 
-        <!-- ===== Donut + Concept Insights (same card composition as class) ===== -->
         <div class="card border-0 shadow-sm rounded-4 mb-3">
             <div class="card-body">
                 <div class="row g-4 align-items-start">
-                    <!-- Left: donut -->
                     <div class="col-lg-4">
-                        <div class="fw-semibold mb-2">Mastery</div>
-                        <div id="studentDonut"
-                             data-completed="@((int)Math.Round((Model.MasteryRate) * 100))"
-                             style="min-height:240px;"></div>
+                        <div class="fw-semibold mb-2">Progress</div>
+                        <div id="studentDonut" data-completed="@masteryPct" style="min-height:240px;"></div>
                     </div>
 
-                    <!-- Right: Concept Insights -->
                     <div class="col-lg-8">
                         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                             <div class="fw-semibold">Concept Insights</div>
                             <select id="conceptSelectInsights" class="form-select form-select-sm" style="min-width:280px;">
-                                <option value="">All concepts</option>
-                                <option value="dd">Distance & Displacement</option>
-                                <option value="sv">Speed & Velocity</option>
-                                <option value="acc">Acceleration</option>
+                                <option value="all" selected>All concepts</option>
+                                <option value="Distance & Displacement">Distance &amp; Displacement</option>
+                                <option value="Speed & Velocity">Speed &amp; Velocity</option>
+                                <option value="Acceleration">Acceleration</option>
                             </select>
                         </div>
 
@@ -90,8 +86,8 @@
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div class="fw-semibold">Trend Over Time</div>
                             <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-primary" id="btnConceptAttempts" data-stu-metric="Attempts">Attempts</button>
-                                <button type="button" class="btn btn-sm btn-outline-primary" id="btnConceptTime" data-stu-metric="Time">Time</button>
+                                <button type="button" class="btn btn-sm btn-primary" id="btnConceptAttempts">Attempts</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="btnConceptTime">Time</button>
                             </div>
                         </div>
                         <div id="conceptTrend" style="min-height:300px;"></div>
@@ -100,17 +96,15 @@
             </div>
         </div>
 
-        <!-- ===== Concept Accuracy bars (keep) ===== -->
         <div class="card border-0 shadow-sm rounded-4 mb-3">
             <div class="card-body">
                 <div class="fw-semibold mb-2">Concept Accuracy</div>
                 <div id="studentConceptBar"
-                     data-labels='@System.Text.Json.JsonSerializer.Serialize(Model.Concepts)'
-                     data-values='@System.Text.Json.JsonSerializer.Serialize(Model.ConceptAvgAccuracyPct)'></div>
+                     data-labels='@conceptLabelsJson'
+                     data-values='@conceptBarsJson'></div>
             </div>
         </div>
 
-        <!-- ===== Recent Attempts ===== -->
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body">
                 <div class="fw-semibold mb-2">Recent Attempts</div>
@@ -121,6 +115,7 @@
                             <thead class="table-success">
                                 <tr>
                                     <th>Ended</th>
+                                    <th>Student</th>
                                     <th>Concept</th>
                                     <th>Problem</th>
                                     <th>Status</th>
@@ -134,6 +129,7 @@
                                 {
                                     <tr>
                                         <td>@r.EndedAt.ToLocalTime()</td>
+                                        <td>@r.StudentId</td>
                                         <td>@r.ConceptId</td>
                                         <td>@r.ProblemId</td>
                                         <td>@r.Status</td>
@@ -148,7 +144,6 @@
                 }
                 else
                 {
-
                     <div class="alert alert-light border mb-0">No attempts yet.</div>
                 }
             </div>
@@ -160,106 +155,60 @@
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script>
-        // ========= Shared D3 helpers (same look/feel as class) =========
-        const D3Base = (() => {
-          function makeSvg(sel, w=820, h=320, m={top:20,right:20,bottom:30,left:44}) {
-            const root = d3.select(sel); root.selectAll("*").remove();
-            const svg = root.append("svg").attr("width", w).attr("height", h);
-            const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
-            return { svg, g, w: w - m.left - m.right, h: h - m.top - m.bottom };
-          }
-          const parseDate = d => (d instanceof Date) ? d : new Date(d);
-          return { makeSvg, parseDate };
-        })();
-
-        function LineChart(sel, series) {
-          const { g, w, h } = D3Base.makeSvg(sel);
-          const data = (series.points || []).map(p => ({ x: D3Base.parseDate(p.x), y: +p.y }));
-          const x = d3.scaleTime().range([0, w]).domain(d3.extent(data, d => d.x) || [new Date(), new Date()]);
-          const y = d3.scaleLinear().range([h, 0]).domain([0, d3.max(data, d => d.y) || 1]).nice();
-          g.append("g").attr("transform", `translate(0,${h})`).call(d3.axisBottom(x));
-          g.append("g").call(d3.axisLeft(y));
-          const line = d3.line().x(d => x(d.x)).y(d => y(d.y));
-          g.append("path").datum(data).attr("fill","none").attr("stroke","#0d6efd").attr("stroke-width",2).attr("d", line);
-          g.selectAll("circle").data(data).enter().append("circle").attr("cx", d => x(d.x)).attr("cy", d => y(d.y)).attr("r", 3).attr("fill","#0d6efd");
-        }
-        function BarChart(sel, items) {
-          const { g, w, h } = D3Base.makeSvg(sel);
-          const x = d3.scaleBand().domain(items.map(d => d.x)).range([0, w]).padding(0.2);
-          const y = d3.scaleLinear().domain([0, d3.max(items, d => d.y) || 1]).range([h, 0]).nice();
-          g.append("g").attr("transform", `translate(0,${h})`).call(d3.axisBottom(x));
-          g.append("g").call(d3.axisLeft(y));
-          g.selectAll("rect").data(items).enter().append("rect")
-            .attr("x", d => x(d.x)).attr("y", d => y(d.y))
-            .attr("width", x.bandwidth()).attr("height", d => h - y(d.y))
-            .attr("fill", "#198754");
-        }
-        function DonutProgress(sel, completed, total) {
-          const size = 240, thick = 30;
-          const root = D3Base.makeSvg(sel, size, size, {top:0,right:0,bottom:0,left:0});
-          const g = root.svg.append("g").attr("transform", `translate(${size/2},${size/2})`);
-          const pct = total > 0 ? Math.max(0, Math.min(1, completed / total)) : 0;
-          const arc = d3.arc().innerRadius((size/2)-thick).outerRadius(size/2).startAngle(0);
-          g.append("path").datum({endAngle: 2*Math.PI}).attr("fill","#e9ecef").attr("d", arc);
-          g.append("path").datum({endAngle: 2*Math.PI*pct}).attr("fill","#198754").attr("d", arc);
-          g.append("text").attr("text-anchor","middle").attr("dy","0.35em").text(`${(pct*100).toFixed(1)}%`);
-        }
-
-        // ========= Boot charts (same behavior as class, but student routes) =========
+        // WHAT IT DOES: D3 helpers + calls student endpoints for concept tiles/trend, draws donut/bars.
+        const D3Base=(()=>{function m(s,w=820,h=320,p={top:20,right:20,bottom:30,left:44}){const r=d3.select(s);r.selectAll("*").remove();const svg=r.append("svg").attr("width",w).attr("height",h);const g=svg.append("g").attr("transform",`translate(${p.left},${p.top})`);return{svg,g,w:w-p.left-p.right,h:h-p.top-p.bottom}}const d=x=>x instanceof Date?x:new Date(x);return{makeSvg:m,parseDate:d}})();
+        function LineChart(sel, series){const {g,w,h}=D3Base.makeSvg(sel);const data=(series.points||[]).map(p=>({x:D3Base.parseDate(p.x),y:+p.y}));const x=d3.scaleTime().range([0,w]).domain(d3.extent(data,d=>d.x)||[new Date(),new Date()]);const y=d3.scaleLinear().range([h,0]).domain([0,d3.max(data,d=>d.y)||1]).nice();g.append("g").attr("transform",`translate(0,${h})`).call(d3.axisBottom(x));g.append("g").call(d3.axisLeft(y));const line=d3.line().x(d=>x(d.x)).y(d=>y(d.y));g.append("path").datum(data).attr("fill","none").attr("stroke","#0d6efd").attr("stroke-width",2).attr("d",line);g.selectAll("circle").data(data).enter().append("circle").attr("cx",d=>x(d.x)).attr("cy",d=>y(d.y)).attr("r",3).attr("fill","#0d6efd")}
+        function BarChart(sel, items){const {g,w,h}=D3Base.makeSvg(sel);const x=d3.scaleBand().domain(items.map(d=>d.x)).range([0,w]).padding(0.2);const y=d3.scaleLinear().domain([0,d3.max(items,d=>d.y)||1]).range([h,0]).nice();g.append("g").attr("transform",`translate(0,${h})`).call(d3.axisBottom(x));g.append("g").call(d3.axisLeft(y));g.selectAll("rect").data(items).enter().append("rect").attr("x",d=>x(d.x)).attr("y",d=>y(d.y)).attr("width",x.bandwidth()).attr("height",d=>h-y(d.y)).attr("fill","#198754")}
+        function DonutProgress(sel, completed, total){const size=240,thick=30;const root=D3Base.makeSvg(sel,size,size,{top:0,right:0,bottom:0,left:0});const g=root.svg.append("g").attr("transform",`translate(${size/2},${size/2})`);const pct=total>0?Math.max(0,Math.min(1,completed/total)):0;const arc=d3.arc().innerRadius((size/2)-thick).outerRadius(size/2).startAngle(0);g.append("path").datum({endAngle:2*Math.PI}).attr("fill","#e9ecef").attr("d",arc);g.append("path").datum({endAngle:2*Math.PI*pct}).attr("fill","#198754").attr("d",arc);g.append("text").attr("text-anchor","middle").attr("dy","0.35em").text(`${(pct*100).toFixed(1)}%`)}
         (function(){
-          // Donut
-          const donutEl = document.getElementById("studentDonut");
-          if (donutEl) DonutProgress("#studentDonut", +donutEl.dataset.completed || 0, 100);
+          const donutEl=document.getElementById("studentDonut"); if(donutEl) DonutProgress("#studentDonut", +donutEl.dataset.completed || 0, 100);
 
-          // Concept Insights
-          const conceptSel = document.getElementById("conceptSelectInsights");
-          const btnA = document.getElementById("btnConceptAttempts");
-          const btnT = document.getElementById("btnConceptTime");
-          const valAttempts = document.getElementById("conceptAvgAttempts");
-          const valTime = document.getElementById("conceptAvgTime");
-          const studentId = "@Model.StudentId";
+          const conceptSel=document.getElementById("conceptSelectInsights");
+          const btnA=document.getElementById("btnConceptAttempts");
+          const btnT=document.getElementById("btnConceptTime");
+          const valAttempts=document.getElementById("conceptAvgAttempts");
+          const valTime=document.getElementById("conceptAvgTime");
+          const studentId="@Model.StudentId";
 
-          async function loadConceptSummary() {
-            const conceptId = conceptSel.value || "";
-            const r = await fetch(`/api/analytics/student/${encodeURIComponent(studentId)}/concept-summary?conceptId=${encodeURIComponent(conceptId)}`);
-            const d = await r.json();
-            valAttempts.textContent = (d.avgAttempts ?? 0).toFixed(2);
-            const secs = Math.round(d.avgTimeSec ?? 0), m = Math.floor(secs/60), s = secs%60;
-            valTime.textContent = `${m} min ${s} sec`;
+          async function loadConceptSummary(){
+            const conceptId=conceptSel.value || "all";
+            const r=await fetch(`/api/analytics/student/${encodeURIComponent(studentId)}/concept-summary?conceptId=${encodeURIComponent(conceptId)}`);
+            const d=await r.json();
+            valAttempts.textContent=(d.avgAttempts??0).toFixed(2);
+            const secs=Math.round(d.avgTimeSec??0),m=Math.floor(secs/60),s=secs%60;
+            valTime.textContent=`${m} min ${s} sec`;
           }
-          async function drawConceptTrend(metric) {
-            const conceptId = conceptSel.value || "";
-            const r = await fetch(`/api/analytics/student/${encodeURIComponent(studentId)}/trend?metric=${encodeURIComponent(metric)}&conceptId=${encodeURIComponent(conceptId)}`);
-            const series = await r.json();
+          async function drawConceptTrend(metric){
+            const conceptId=conceptSel.value || "all";
+            const r=await fetch(`/api/analytics/student/${encodeURIComponent(studentId)}/trend?metric=${encodeURIComponent(metric)}&conceptId=${encodeURIComponent(conceptId)}`);
+            const series=await r.json();
             LineChart("#conceptTrend", series);
           }
 
-          // init + events
-          loadConceptSummary(); drawConceptTrend("Attempts");
-          conceptSel.addEventListener("change", () => {
-            loadConceptSummary();
-            const metric = btnA.classList.contains("btn-primary") ? "Attempts" : "Time";
-            drawConceptTrend(metric);
+          (async function init(){
+            await loadConceptSummary();
+            await drawConceptTrend("Attempts");
+          })();
+
+          conceptSel.addEventListener("change", async ()=>{
+            await loadConceptSummary();
+            const metric=btnA.classList.contains("btn-primary")?"Attempts":"Time";
+            await drawConceptTrend(metric);
           });
-          btnA.addEventListener("click", () => {
+          btnA.addEventListener("click", async ()=>{
             btnA.classList.add("btn-primary"); btnA.classList.remove("btn-outline-primary");
             btnT.classList.remove("btn-primary"); btnT.classList.add("btn-outline-primary");
-            drawConceptTrend("Attempts");
+            await drawConceptTrend("Attempts");
           });
-          btnT.addEventListener("click", () => {
+          btnT.addEventListener("click", async ()=>{
             btnT.classList.add("btn-primary"); btnT.classList.remove("btn-outline-primary");
             btnA.classList.remove("btn-primary"); btnA.classList.add("btn-outline-primary");
-            drawConceptTrend("Time");
+            await drawConceptTrend("Time");
           });
 
-          // Bars
-          const bar = document.getElementById("studentConceptBar");
-          if (bar) {
-            const labels = JSON.parse(bar.dataset.labels || "[]");
-            const values = JSON.parse(bar.dataset.values || "[]");
-            const items = labels.map((x,i)=>({ x, y: +values[i] || 0 }));
-            BarChart("#studentConceptBar", items);
-          }
+          const bar=document.getElementById("studentConceptBar");
+          if(bar){const labels=JSON.parse(bar.dataset.labels||"[]"); const values=JSON.parse(bar.dataset.values||"[]");
+            const items=labels.map((x,i)=>({x,y:+values[i] || 0})); BarChart("#studentConceptBar", items);}
         })();
     </script>
 }
