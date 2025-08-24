@@ -153,177 +153,72 @@ else
 
         <div class="tab-content">
             <div class="tab-pane fade show active" id="tab-students">
-                @if (Model.IsOverall)
-                {
-                    <ul class="nav nav-pills mb-3" id="students-class-tabs" role="tablist">
-                        @{
-                            var idx = 0;
-                        }
-                        @foreach (var t in Model.StudentTabs)
-                        {
-                            var active = idx == 0 ? "active" : "";
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link @active"
-                                        id="tab-@t.ClassId"
-                                        data-bs-toggle="tab"
-                                        data-bs-target="#pane-@t.ClassId"
-                                        type="button" role="tab"
-                                        aria-controls="pane-@t.ClassId"
-                                        aria-selected="@(idx == 0 ? "true" : "false")">
-                                    @t.ClassName
-                                </button>
-                            </li>
-                            idx++;
-                        }
-                    </ul>
+                @* keep your existing class-only table branch here (the else branch in your original) *@
 
-                    <div class="tab-content">
-                        @{
-                            var paneIdx = 0;
-                        }
-                        @foreach (var t in Model.StudentTabs)
-                        {
-                            var show = paneIdx == 0 ? "show active" : "";
-                            <div class="tab-pane fade @show" id="pane-@t.ClassId" role="tabpanel" aria-labelledby="tab-@t.ClassId">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="fw-semibold">Students in @t.ClassName</div>
-                                    <div class="input-group" style="max-width: 280px;">
-                                        <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                        <input class="form-control js-student-search" placeholder="Search students"
-                                               data-target="#table-@t.ClassId" />
-                                    </div>
-                                </div>
-
-                                @if (t.Students?.Any() == true)
-                                {
-                                    <div class="table-responsive student-scroll" style="max-height: 420px;">
-                                        <table class="table table-sm align-middle mb-0" id="table-@t.ClassId">
-                                            <thead>
-                                                <tr class="table-success">
-                                                    <th>Name</th>
-                                                    <th class="d-none d-md-table-cell">Email</th>
-                                                    <th class="text-center">Attempts</th>
-                                                    <th class="text-center">Avg Accuracy</th>
-                                                    <th class="d-none d-md-table-cell">Last Active</th>
-                                                    <th class="text-end">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var s in t.Students)
-                                                {
-                                                    <tr>
-                                                        <td>
-                                                            <a asp-action="Student" asp-route-studentId="@s.StudentId" class="text-decoration-none">
-                                                                @s.Name
-                                                            </a>
-                                                        </td>
-                                                        <td class="d-none d-md-table-cell">@s.Email</td>
-                                                        <td class="text-center">@s.TotalAttempts</td>
-                                                        <td class="text-center">@string.Format("{0:P0}", s.AvgAccuracy)</td>
-                                                        <td class="d-none d-md-table-cell">@((s.LastActive?.ToString("dd/MM/yyyy h:mm tt")) ?? "-")</td>
-                                                        <td class="text-end">
-                                                            <button class="btn btn-link p-0" data-bs-toggle="dropdown" aria-expanded="false">
-                                                                <i class="bi bi-three-dots-vertical"></i>
-                                                            </button>
-                                                            <ul class="dropdown-menu dropdown-menu-end">
-                                                                <li>
-                                                                    <button class="dropdown-item text-secondary" data-bs-toggle="modal" data-bs-target="#studentEditModal"
-                                                                            data-sid="@s.StudentId" data-name="@s.Name" data-email="@s.Email"
-                                                                            data-class="@t.ClassId">
-                                                                        Edit
-                                                                    </button>
-                                                                </li>
-                                                                <li><hr class="dropdown-divider"></li>
-                                                                <li>
-                                                                    <button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#studentDeleteModal"
-                                                                            data-sid="@s.StudentId" data-class="@t.ClassId">
-                                                                        Delete
-                                                                    </button>
-                                                                </li>
-                                                            </ul>
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="alert alert-light border mb-0">No students in this class.</div>
-                                }
-                            </div>
-                            paneIdx++;
-                        }
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-semibold">Students in @Model.CurrentClassName</div>
+                    <div class="input-group" style="max-width: 280px;">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input class="form-control js-student-search" placeholder="Search students"
+                               data-target="#table-class" />
                     </div>
-                }
-                else
-                {
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="fw-semibold">Students in @Model.CurrentClassName</div>
-                        <div class="input-group" style="max-width: 280px;">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
-                            <input class="form-control js-student-search" placeholder="Search students"
-                                   data-target="#table-class" />
-                        </div>
-                    </div>
+                </div>
 
-                    <div class="table-responsive student-scroll" style="max-height: 420px;">
-                        <table class="table table-sm align-middle mb-0" id="table-class">
-                            <thead>
-                                <tr class="table-success">
-                                    <th>Name</th>
-                                    <th class="d-none d-md-table-cell">Email</th>
-                                    <th class="text-center">Attempts</th>
-                                    <th class="text-center">Avg Accuracy</th>
-                                    <th class="d-none d-md-table-cell">Last Active</th>
-                                    <th class="text-end">Actions</th>
+                <div class="table-responsive student-scroll" style="max-height: 420px;">
+                    <table class="table table-sm align-middle mb-0" id="table-class">
+                        <thead>
+                            <tr class="table-success">
+                                <th>Name</th>
+                                <th class="d-none d-md-table-cell">Email</th>
+                                <th class="text-center">Attempts</th>
+                                <th class="text-center">Avg Accuracy</th>
+                                <th class="d-none d-md-table-cell">Last Active</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        @{
+                            var classStudentsList = Model.Students
+                            ?? Enumerable.Empty<Kinemathika.ViewModels.Teacher.StudentRowVm>();
+                        }
+                        <tbody>
+                            @foreach (var s in classStudentsList)
+                            {
+                                <tr>
+                                    <td>
+                                        <a asp-action="Student" asp-route-studentId="@s.StudentId" class="text-decoration-none">
+                                            @s.Name
+                                        </a>
+                                    </td>
+                                    <td class="d-none d-md-table-cell">@s.Email</td>
+                                    <td class="text-center">@s.TotalAttempts</td>
+                                    <td class="text-center">@string.Format("{0:P0}", s.AvgAccuracy)</td>
+                                    <td class="d-none d-md-table-cell">@((s.LastActive?.ToString("dd/MM/yyyy h:mm tt")) ?? "-")</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-link p-0" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="bi bi-three-dots-vertical"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li>
+                                                <button class="dropdown-item text-secondary" data-bs-toggle="modal" data-bs-target="#studentEditModal"
+                                                        data-sid="@s.StudentId" data-name="@s.Name" data-email="@s.Email"
+                                                        data-class="@Model.CurrentClassId">
+                                                    Edit
+                                                </button>
+                                            </li>
+                                            <li><hr class="dropdown-divider" /></li>
+                                            <li>
+                                                <button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#studentDeleteModal"
+                                                        data-sid="@s.StudentId" data-class="@Model.CurrentClassId">
+                                                    Delete
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </td>
                                 </tr>
-                            </thead>
-                            @{
-                                var classStudentsList = Model.Students
-                                ?? Enumerable.Empty<Kinemathika.ViewModels.Teacher.StudentRowVm>();
                             }
-                            <tbody>
-                                @foreach (var s in classStudentsList)
-                                {
-                                    <tr>
-                                        <td>
-                                            <a asp-action="Student" asp-route-studentId="@s.StudentId" class="text-decoration-none">
-                                                @s.Name
-                                            </a>
-                                        </td>
-                                        <td class="d-none d-md-table-cell">@s.Email</td>
-                                        <td class="text-center">@s.TotalAttempts</td>
-                                        <td class="text-center">@string.Format("{0:P0}", s.AvgAccuracy)</td>
-                                        <td class="d-none d-md-table-cell">@((s.LastActive?.ToString("dd/MM/yyyy h:mm tt")) ?? "-")</td>
-                                        <td class="text-end">
-                                            <button class="btn btn-link p-0" data-bs-toggle="dropdown" aria-expanded="false">
-                                                <i class="bi bi-three-dots-vertical"></i>
-                                            </button>
-                                            <ul class="dropdown-menu dropdown-menu-end">
-                                                <li>
-                                                    <button class="dropdown-item text-secondary" data-bs-toggle="modal" data-bs-target="#studentEditModal"
-                                                            data-sid="@s.StudentId" data-name="@s.Name" data-email="@s.Email"
-                                                            data-class="@Model.CurrentClassId">
-                                                        Edit
-                                                    </button>
-                                                </li>
-                                                <li><hr class="dropdown-divider" /></li>
-                                                <li>
-                                                    <button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#studentDeleteModal"
-                                                            data-sid="@s.StudentId" data-class="@Model.CurrentClassId">
-                                                        Delete
-                                                    </button>
-                                                </li>
-                                            </ul>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="tab-pane fade" id="tab-reports">
