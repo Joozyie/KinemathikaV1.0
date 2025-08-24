@@ -111,46 +111,104 @@ BEGIN
 END
 GO
 
+ALTER TABLE dbo.AttemptRecords
+    ADD problem_no TINYINT NOT NULL CONSTRAINT DF_Attempt_problem_no DEFAULT(1);
+GO
+
+ALTER TABLE dbo.AttemptRecords
+    ADD CONSTRAINT CK_Attempt_ProblemNo CHECK (problem_no BETWEEN 1 AND 15);
+GO
+
+-- Backfill existing rows with a stable random 1..15 (only run once on legacy data)
+;WITH S AS
+(
+  SELECT attempt_id,
+         (ABS(CHECKSUM(NEWID())) % 15) + 1 AS n
+  FROM dbo.AttemptRecords
+)
+UPDATE a SET a.problem_no = s.n
+FROM dbo.AttemptRecords a
+JOIN S ON S.attempt_id = a.attempt_id;
+GO
+
 -- Attempts for every student, 3 concepts, 2025-08-16..2025-08-22 (7 days)
+/* === Reseed AttemptRecords with explicit problem_no (1..15) and varied completion === */
+
+-- Window to spread timestamps
 DECLARE @start DATE = '2025-08-16';
 DECLARE @end   DATE = '2025-08-22';
+DECLARE @days  INT  = DATEDIFF(DAY, @start, @end) + 1;
 
-;WITH Dates AS
-(
-    SELECT @start AS d
-    UNION ALL
-    SELECT DATEADD(DAY, 1, d) FROM Dates WHERE d < @end
-),
-StudentsX AS
+-- Start clean (we’re rebuilding fresh anyway)
+TRUNCATE TABLE dbo.AttemptRecords;
+
+-- Helpful index for the new column (safe to re-run)
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Attempts_StudentConceptProblem' AND object_id = OBJECT_ID(N'dbo.AttemptRecords'))
+    CREATE INDEX IX_Attempts_StudentConceptProblem ON dbo.AttemptRecords(student_id, concept_id, problem_no);
+
+-- Static sets
+DECLARE @Concepts TABLE (concept_id VARCHAR(10));
+INSERT @Concepts VALUES ('dd'),('sv'),('acc');
+
+DECLARE @Problems TABLE (problem_no TINYINT);
+INSERT @Problems VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15);
+
+;WITH StudentsX AS
 (
     SELECT e.ClassroomId AS class_id, e.StudentId
     FROM dbo.Enrollments e
 ),
-Concepts AS
+/* For each (student, concept) choose how far they “completed”.
+   ~25% go all the way to 15; others vary. */
+StudentConcepts AS
 (
-    SELECT 'dd' AS concept_id UNION ALL
-    SELECT 'sv' UNION ALL
-    SELECT 'acc'
-)
-INSERT dbo.AttemptRecords (class_id, student_id, concept_id, attempts_to_correct, time_to_correct_ms, ended_at)
-SELECT  sx.class_id,
+    SELECT 
+        sx.class_id,
         sx.StudentId,
         c.concept_id,
-        (ABS(CHECKSUM(NEWID())) % 3) + 1,                 -- 1..3 attempts
-        ((ABS(CHECKSUM(NEWID())) % 240) + 45) * 1000,     -- 45..284 seconds (ms)
-        DATEADD(SECOND, ABS(CHECKSUM(NEWID())) % 86400, CAST(d.d AS DATETIME2(0)))  -- random time in the day
-FROM Dates d
-CROSS JOIN StudentsX sx
-CROSS JOIN Concepts c
-OPTION (MAXRECURSION 32767);
-
--- Sprinkle some easy first-try solves on the first day
-INSERT dbo.AttemptRecords (class_id, student_id, concept_id, attempts_to_correct, time_to_correct_ms, ended_at)
-SELECT  e.ClassroomId, e.StudentId, 'dd',
-        1, ((ABS(CHECKSUM(NEWID())) % 60) + 10) * 1000,
-        DATEADD(SECOND, 60, CAST(@start AS DATETIME2(0)))
-FROM dbo.Enrollments e
-WHERE (ABS(CHECKSUM(NEWID())) % 4) = 0;
+        CompletedMax =
+            CASE 
+                WHEN ABS(CHECKSUM(NEWID(), sx.StudentId, c.concept_id, 1)) % 100 < 25 THEN 15                                    -- 25% reach 15
+                WHEN ABS(CHECKSUM(NEWID(), sx.StudentId, c.concept_id, 2)) % 100 < 55 THEN 12 + (ABS(CHECKSUM(NEWID(), sx.StudentId, c.concept_id, 3)) % 4)  -- 12..15
+                WHEN ABS(CHECKSUM(NEWID(), sx.StudentId, c.concept_id, 4)) % 100 < 85 THEN  8 + (ABS(CHECKSUM(NEWID(), sx.StudentId, c.concept_id, 5)) % 5)  -- 8..12
+                ELSE 3 + (ABS(CHECKSUM(NEWID(), sx.StudentId, c.concept_id, 6)) % 5)                                                                 -- 3..7
+            END
+    FROM StudentsX sx
+    CROSS JOIN @Concepts c
+)
+-- Completed problems (problem_no <= CompletedMax)
+INSERT dbo.AttemptRecords (class_id, student_id, concept_id, problem_no, attempts_to_correct, time_to_correct_ms, ended_at)
+SELECT
+    sc.class_id,
+    sc.StudentId,
+    sc.concept_id,
+    p.problem_no,
+    1 + (ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p.problem_no, 7)) % 3) AS attempts_to_correct,   -- 1..3
+    ((45 + (ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p.problem_no, 8)) % 240)) * 1000) AS time_ms, -- 45..284s
+    DATEADD(SECOND,
+            ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p.problem_no, 9)) % 86400,
+            DATEADD(DAY,
+                    ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p.problem_no, 10)) % @days,
+                    CAST(@start AS DATETIME2(0))))
+FROM StudentConcepts sc
+JOIN @Problems p ON p.problem_no <= sc.CompletedMax
+UNION ALL
+-- Incomplete attempts beyond their depth (~20% of remaining problems), attempts 3..5
+SELECT
+    sc.class_id,
+    sc.StudentId,
+    sc.concept_id,
+    p2.problem_no,
+    3 + (ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p2.problem_no, 11)) % 3),                        -- 3..5
+    ((45 + (ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p2.problem_no, 12)) % 240)) * 1000),
+    DATEADD(SECOND,
+            ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p2.problem_no, 13)) % 86400,
+            DATEADD(DAY,
+                    ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p2.problem_no, 14)) % @days,
+                    CAST(@start AS DATETIME2(0))))
+FROM StudentConcepts sc
+JOIN @Problems p2 ON p2.problem_no > sc.CompletedMax
+WHERE (ABS(CHECKSUM(NEWID(), sc.StudentId, sc.concept_id, p2.problem_no, 15)) % 5) = 0;                      -- 20%
 GO
 
-PRINT '✅ KinemathikaDb rebuilt and seeded (classes 20–23, students + attempts for 2025-08-16..2025-08-22).';
+PRINT '✅ AttemptRecords seeded with varied completion depths (problem_no 1..15 for dd/sv/acc).';
