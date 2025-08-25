@@ -1,530 +1,280 @@
-﻿@* Teacher Dashboard: Overall + Class views, Concept Insights only (no bar chart) *@
-@model Kinemathika.ViewModels.Teacher.TeacherDashboardVm
-@using Kinemathika.ViewModels.Teacher
-@using System.Linq
+﻿@* Teacher Dashboard: All Class Overview using RDashboardOverviewVm and Chart.js *@
+@model TeacherOverviewVm
 
 @{
     ViewData["IsAuthPage"] = true;
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Shared/_TeacherLayout.cshtml";
+        var pageTitle = string.IsNullOrEmpty(Model.ClassName)
+        ? "All Class Overview"
+        : $"{Model.ClassName} Overview";
 
-    var pageTitle = Model.IsOverall ? "Overall Overview" : $"Class Overview — {Model.CurrentClassName}";
+    Func<string, string> MapConceptName = id => id switch
+    {
+        "all" => "All Concepts",
+        "sv" => "Speed and Velocity",
+        "dd" => "Distance and Displacement",
+        "acc" => "Acceleration",
+        _ => id
+    };
 }
 
 @section PageTitle {
-    <div class="fw-semibold">@pageTitle</div>
-}
-@section PageActions {
-    <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#studentAddModal">
-        <i class="bi bi-person-plus me-1"></i>Add Student
-    </button>
+    <div class="fw-bold mb-3">@pageTitle</div>
 }
 
 <!-- ==================== TOP KPI ROW ==================== -->
-@if (Model.IsOverall)
-{
-    var conceptAttempts = Model.Overview?.ConceptAvgAttempts ?? new List<double>();
-    var avgAttempts = conceptAttempts.Any() ? Math.Round(conceptAttempts.Average(), 2) : 0.0;
-    var secs = (double)(Model.Overview?.AvgTimeToCorrectSec ?? 0);
-    var t = TimeSpan.FromSeconds(secs);
-    var timeNice = $"{(int)t.TotalMinutes} min {t.Seconds} sec";
-    var firstTryPct = string.Format("{0:P0}", Model.Overview?.FirstTryCorrectRate ?? 0m);
-
-    <div class="row g-3 mb-3">
-        <div class="col-12 col-lg-2 col-md-4">
+<div class="row g-3 mb-3">
+    @if (string.IsNullOrEmpty(Model.ClassName))
+    {
+        <div class="col">
             <div class="kpi-tile kpi-blue">
                 <div class="kpi-label">Total Classes</div>
-                <div class="kpi-value">@Model.Overview?.TotalClasses</div>
+                <div class="kpi-value">@Model.Dashboard.TotalClasses</div>
             </div>
         </div>
-        <div class="col-12 col-lg-2 col-md-4">
-            <div class="kpi-tile kpi-blue">
-                <div class="kpi-label">Total Students</div>
-                <div class="kpi-value">@Model.Overview?.TotalStudents</div>
-            </div>
+    }
+    <div class="col">
+        <div class="kpi-tile kpi-blue">
+            <div class="kpi-label">Total Students</div>
+            <div class="kpi-value">@Model.Dashboard.TotalStudents</div>
         </div>
-        <div class="col-12 col-lg-3 col-md-4">
-            <div class="kpi-tile kpi-orange">
-                <div class="kpi-label">Avg Attempts per Problem</div>
-                <div class="kpi-value">@avgAttempts</div>
-            </div>
+    </div>
+    <div class="col">
+        <div class="kpi-tile kpi-orange">
+            <div class="kpi-label">Avg Attempts per Problem</div>
+            <div class="kpi-value">@Model.Dashboard.AvgAttemptsPerProblem.ToString("0.00")</div>
         </div>
-        <div class="col-12 col-lg-3 col-md-6">
-            <div class="kpi-tile kpi-green">
-                <div class="kpi-label">Avg Time per Problem</div>
-                <div class="kpi-value">@timeNice</div>
-            </div>
-        </div>
-        <div class="col-12 col-lg-2 col-md-6">
-            <div class="kpi-tile kpi-blue">
-                <div class="kpi-label">First-Try Correct</div>
-                <div class="kpi-value">@firstTryPct</div>
+    </div>
+    <div class="col">
+        <div class="kpi-tile kpi-green">
+            <div class="kpi-label">Avg Time per Problem</div>
+            <div class="kpi-value">
+                @{
+                    var secs = Model.Dashboard.AvgTimePerProblem;
+                    var t = TimeSpan.FromSeconds(secs);
+                }
+                @($"{(int)t.TotalMinutes} min {t.Seconds} sec")
             </div>
         </div>
     </div>
-}
-else
-{
-    var classStudentsCount = Model.Students?.Count() ?? 0;
-    var classConceptAttempts = Model.Overview?.ConceptAvgAttempts ?? new List<double>();
-    var classAvgAttempts = classConceptAttempts.Any() ? Math.Round(classConceptAttempts.Average(), 2) : 0.0;
-    var csecs = (double)(Model.Overview?.AvgTimeToCorrectSec ?? 0);
-    var ct = TimeSpan.FromSeconds(csecs);
-    var ctimeNice = $"{(int)ct.TotalMinutes} min {ct.Seconds} sec";
+</div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-12 col-lg-4">
-            <div class="kpi-tile kpi-blue">
-                <div class="kpi-label">Total Students</div>
-                <div class="kpi-value">@classStudentsCount</div>
-            </div>
-        </div>
-        <div class="col-12 col-lg-4">
-            <div class="kpi-tile kpi-orange">
-                <div class="kpi-label">Avg Attempts per Problem</div>
-                <div class="kpi-value">@classAvgAttempts</div>
-            </div>
-        </div>
-        <div class="col-12 col-lg-4">
-            <div class="kpi-tile kpi-green">
-                <div class="kpi-label">Avg Time per Problem</div>
-                <div class="kpi-value">@ctimeNice</div>
-            </div>
-        </div>
-    </div>
-}
-
-<!-- ==================== PROGRESS + CONCEPT INSIGHTS (side-by-side) ==================== -->
+<!-- ==================== PROGRESS + CONCEPT INSIGHTS CARD ==================== -->
 <div class="card border-0 shadow-sm rounded-4 mb-3">
     <div class="card-body">
-        <div class="row g-4 align-items-start">
-            <div class="col-12 col-xl-5">
-                <div class="fw-semibold mb-2">@((Model.IsOverall) ? "Overall Progress" : "Class Progress")</div>
-                <div id="progressDonut"
-                     data-completed="@((int)Math.Round(((Model.Overview?.MasteryRate ?? 0m) * 100)))"
-                     style="min-height:280px;"></div>
+        <!-- Card Title -->
+        <div class="fw-bold fs-5 mb-3">Concept Insights</div>
+
+        <div class="row g-4">
+            <!-- Left Column: Donut Chart -->
+            <div class="col-12 col-xl-5 text-center d-flex flex-column align-items-center">
+                <div class="position-relative" style="width: 100%; max-width: 260px; aspect-ratio: 1;">
+                    <canvas id="progressDonut"></canvas>
+                    <div id="donutCenterText" 
+                        class="position-absolute top-50 start-50 translate-middle fw-bold text-success text-center" 
+                        style="font-size: 1.4rem; line-height: 1.4;">
+                    </div>
+                </div>
             </div>
 
+            <!-- Right Column: Concept Insights -->
             <div class="col-12 col-xl-7">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-semibold">Concept Insights</div>
-                    <select id="conceptSelectInsights" class="form-select form-select-sm" style="min-width:280px;">
-                        <option value="dd">Distance & Displacement</option>
-                        <option value="sv">Speed & Velocity</option>
-                        <option value="acc">Acceleration</option>
+                <!-- Dropdown -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="fw-semibold col-3">Select Concept</div>
+                    <select id="conceptSelectInsights" class="form-select form-select-sm" style="min-width: 280px;">
+                        @foreach (var c in Model.Dashboard.Concepts)
+                        {
+                            <option value="@c.ConceptId">@MapConceptName(c.ConceptId)</option>
+                        }
                     </select>
                 </div>
 
-                <div class="row g-3 mb-3">
+                <!-- KPI Tiles -->
+                <div class="row g-3 mb-4">
                     <div class="col-12 col-lg-6">
-                        <div class="kpi-tile kpi-orange">
-                            <div class="kpi-label">Avg Attempts (concept)</div>
-                            <div class="kpi-value" id="conceptAvgAttempts">0.00</div>
+                        <div class="kpi-tile kpi-orange p-3 rounded-3 shadow-sm text-center">
+                            <div class="kpi-label small">Avg Attempts</div>
+                            <div class="kpi-value fw-bold fs-4" id="conceptAvgAttempts">
+                                @Model.Dashboard.Concepts.FirstOrDefault()?.AvgAttempts.ToString("0.00") ?? "0.00"
+                            </div>
                         </div>
                     </div>
                     <div class="col-12 col-lg-6">
-                        <div class="kpi-tile kpi-green">
-                            <div class="kpi-label">Avg Time (concept)</div>
-                            <div class="kpi-value" id="conceptAvgTime">0 min 0 sec</div>
+                        <div class="kpi-tile kpi-green p-3 rounded-3 shadow-sm text-center">
+                            <div class="kpi-label small">Avg Time</div>
+                            <div class="kpi-value fw-bold fs-4" id="conceptAvgTime">
+                                @{
+                                    var csecs = Model.Dashboard.Concepts.FirstOrDefault()?.AvgTime ?? 0.0;
+                                    var ct = TimeSpan.FromSeconds(csecs);
+                                }
+                                @($"{(int)ct.TotalMinutes} min {ct.Seconds} sec")
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center">
+                <!-- Trend Chart -->
+                <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="fw-semibold">Trend Over Time</div>
-                    <div class="btn-group mb-2">
+                    <div class="btn-group">
                         <button type="button" class="btn btn-sm btn-primary" id="btnConceptAttempts">Attempts</button>
                         <button type="button" class="btn btn-sm btn-outline-primary" id="btnConceptTime">Time</button>
                     </div>
                 </div>
-                <div id="conceptTrend" style="min-height:300px;"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ==================== STUDENTS / REPORTS ==================== -->
-<div class="card border-0 shadow-sm rounded-4 mb-3">
-    <div class="card-body">
-        <ul class="nav nav-tabs mb-3">
-            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-students">Students</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-reports">Reports</a></li>
-        </ul>
-
-        <div class="tab-content">
-            <div class="tab-pane fade show active" id="tab-students">
-                @* keep your existing class-only table branch here (the else branch in your original) *@
-
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-semibold">Students in @Model.CurrentClassName</div>
-                    <div class="input-group" style="max-width: 280px;">
-                        <span class="input-group-text"><i class="bi bi-search"></i></span>
-                        <input class="form-control js-student-search" placeholder="Search students"
-                               data-target="#table-class" />
-                    </div>
-                </div>
-
-                <div class="table-responsive student-scroll" style="max-height: 420px;">
-                    <table class="table table-sm align-middle mb-0" id="table-class">
-                        <thead>
-                            <tr class="table-success">
-                                <th>Name</th>
-                                <th class="d-none d-md-table-cell">Email</th>
-                                <th class="text-center">Attempts</th>
-                                <th class="text-center">Avg Accuracy</th>
-                                <th class="d-none d-md-table-cell">Last Active</th>
-                                <th class="text-end">Actions</th>
-                            </tr>
-                        </thead>
-                        @{
-                            var classStudentsList = Model.Students
-                            ?? Enumerable.Empty<Kinemathika.ViewModels.Teacher.StudentRowVm>();
-                        }
-                        <tbody>
-                            @foreach (var s in classStudentsList)
-                            {
-                                <tr>
-                                    <td>
-                                        <a asp-action="Student" asp-route-studentId="@s.StudentId" class="text-decoration-none">
-                                            @s.Name
-                                        </a>
-                                    </td>
-                                    <td class="d-none d-md-table-cell">@s.Email</td>
-                                    <td class="text-center">@s.TotalAttempts</td>
-                                    <td class="text-center">@string.Format("{0:P0}", s.AvgAccuracy)</td>
-                                    <td class="d-none d-md-table-cell">@((s.LastActive?.ToString("dd/MM/yyyy h:mm tt")) ?? "-")</td>
-                                    <td class="text-end">
-                                        <button class="btn btn-link p-0" data-bs-toggle="dropdown" aria-expanded="false">
-                                            <i class="bi bi-three-dots-vertical"></i>
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end">
-                                            <li>
-                                                <button class="dropdown-item text-secondary" data-bs-toggle="modal" data-bs-target="#studentEditModal"
-                                                        data-sid="@s.StudentId" data-name="@s.Name" data-email="@s.Email"
-                                                        data-class="@Model.CurrentClassId">
-                                                    Edit
-                                                </button>
-                                            </li>
-                                            <li><hr class="dropdown-divider" /></li>
-                                            <li>
-                                                <button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#studentDeleteModal"
-                                                        data-sid="@s.StudentId" data-class="@Model.CurrentClassId">
-                                                    Delete
-                                                </button>
-                                            </li>
-                                        </ul>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="tab-pane fade" id="tab-reports">
-                <div class="fw-semibold mb-2">Overall Statistics</div>
-                <div class="d-flex align-items-end gap-3" style="height:220px;">
-                    @for (int i = 0; i < Model.Report.Bars.Count; i++)
-                    {
-                        var h = Model.Report.Bars[i];
-                        <div class="text-center">
-                            <div style="width:48px; height:@($"{h}%"); background:#198754; border-radius:.5rem .5rem 0 0;"></div>
-                            <div class="small mt-1 text-muted" style="width:60px;">@Model.Report.Labels[i]</div>
-                        </div>
-                    }
+                <div>
+                    <canvas id="conceptTrend" style="width:100%; height:350px;"></canvas>
                 </div>
             </div>
         </div>
     </div>
 </div>
-
-<!-- ==================== RECENT ATTEMPTS ==================== -->
-@{
-    var recentAttempts = Model.Overview?.RecentAttempts
-        ?? new List<Kinemathika.ViewModels.Teacher.RecentAttemptRow>();
-}
-@if (recentAttempts.Any())
-{
-    <div class="card border-0 shadow-sm rounded-4 mb-3">
-        <div class="card-body">
-            <div class="fw-semibold mb-2">
-                Recent Attempts (@(Model.IsOverall ? "All Classes" : Model.CurrentClassName))
-            </div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead class="table-success">
-                        <tr>
-                            <th>Ended</th>
-                            <th>Student</th>
-                            <th>Concept</th>
-                            <th>Problem</th>
-                            <th>Status</th>
-                            <th>First Try</th>
-                            <th>Attempts</th>
-                            <th>Time (s)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var r in recentAttempts)
-                        {
-                            <tr>
-                                <td>@r.EndedAt.ToLocalTime()</td>
-                                <td>@r.StudentId</td>
-                                <td>@r.ConceptId</td>
-                                <td>@r.ProblemId</td>
-                                <td>@r.Status</td>
-                                <td>@(r.FirstTry ? "Yes" : "No")</td>
-                                <td>@r.Attempts</td>
-                                <td>@r.TimeSec</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-}
-else
-{
-    <div class="alert alert-light border mb-3">No recent attempts.</div>
-}
-
-<!-- ==================== ADD / EDIT / DELETE STUDENT MODALS ==================== -->
-<form method="post" asp-action="CreateStudent">
-    @Html.AntiForgeryToken()
-    <input type="hidden" name="classId" value="@Model.CurrentClassId" />
-    <div class="modal fade" id="studentAddModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content rounded-4">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add Student</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Name</label>
-                        <input name="name" class="form-control" required />
-                    </div>
-                    <div class="mb-1">
-                        <label class="form-label">Email</label>
-                        <input name="email" type="email" class="form-control" required />
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Add</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</form>
-
-<form method="post" asp-action="EditStudent">
-    @Html.AntiForgeryToken()
-    <input type="hidden" name="classId" value="@Model.CurrentClassId" />
-    <input type="hidden" name="id" id="editSid" />
-    <div class="modal fade" id="studentEditModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content rounded-4">
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Student</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Name</label>
-                        <input name="name" id="editName" class="form-control" required />
-                    </div>
-                    <div class="mb-1">
-                        <label class="form-label">Email</label>
-                        <input name="email" id="editEmail" type="email" class="form-control" required />
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</form>
-
-<form method="post" asp-action="DeleteStudent">
-    @Html.AntiForgeryToken()
-    <input type="hidden" name="classId" value="@Model.CurrentClassId" />
-    <input type="hidden" name="id" id="delSid" />
-    <div class="modal fade" id="studentDeleteModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content rounded-4">
-                <div class="modal-header">
-                    <h5 class="modal-title text-danger">Delete Student</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    Remove <strong id="delName">this student</strong>?
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-outline-danger">Delete</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</form>
 
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // ---------- Table search + modal prefill ----------
-        (function () {
-            function filterTable(input) {
-                const sel = input.getAttribute('data-target');
-                const table = document.querySelector(sel);
-                if (!table) return;
-                const q = (input.value || '').trim().toLowerCase();
-                table.querySelectorAll('tbody tr').forEach(tr => {
-                    const text = tr.innerText.toLowerCase();
-                    tr.style.display = text.indexOf(q) >= 0 ? '' : 'none';
+        // ---------- Donut (Progress) ----------
+    (function () {
+        const donutCanvas = document.getElementById("progressDonut");
+        const centerText = document.getElementById("donutCenterText");
+        let donutChart = null;
+
+        function drawDonut(progressPct) {
+            centerText.textContent = `Progress\n${Math.round(progressPct)}%`;
+
+            if (donutChart) {
+                donutChart.data.datasets[0].data = [progressPct, 100 - progressPct];
+                donutChart.update();
+            } else {
+                donutChart = new Chart(donutCanvas, {
+                    type: 'doughnut',
+                    data: {
+                        datasets: [{
+                            data: [progressPct, 100 - progressPct],
+                            backgroundColor: ['#198754', '#e9ecef'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '72%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: false }
+                        }
+                    }
                 });
             }
-            document.querySelectorAll('.js-student-search').forEach(inp => {
-                inp.addEventListener('input', () => filterTable(inp));
-            });
-
-            const editModal = document.getElementById('studentEditModal');
-            editModal?.addEventListener('show.bs.modal', e => {
-                const btn = e.relatedTarget;
-                document.getElementById('editSid').value = btn.getAttribute('data-sid') || '';
-                document.getElementById('editName').value = btn.getAttribute('data-name') || '';
-                document.getElementById('editEmail').value = btn.getAttribute('data-email') || '';
-            });
-
-            const delModal = document.getElementById('studentDeleteModal');
-            delModal?.addEventListener('show.bs.modal', e => {
-                const btn = e.relatedTarget;
-                const sid = btn.getAttribute('data-sid') || '';
-                document.getElementById('delSid').value = sid;
-                document.getElementById('delName').textContent = sid || 'this student';
-            });
-        })();
-
-        // ---------- D3 helpers ----------
-        const D3Base = (() => {
-            function makeSvg(sel, w=820, h=320, m={top:20,right:20,bottom:30,left:44}) {
-                const root = d3.select(sel); root.selectAll("*").remove();
-                const svg = root.append("svg").attr("width", w).attr("height", h);
-                const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
-                return { svg, g, w: w - m.left - m.right, h: h - m.top - m.bottom };
-            }
-            const parseDate = d => (d instanceof Date) ? d : new Date(d);
-            return { makeSvg, parseDate };
-        })();
-
-        function LineChart(sel, series) {
-            const { g, w, h } = D3Base.makeSvg(sel);
-            const data = (series?.points || []).map(p => ({ x: D3Base.parseDate(p.x), y: +p.y }));
-
-            // Axes setup even if empty
-            const xDomain = data.length ? d3.extent(data, d => d.x) : [new Date(Date.now()-14*864e5), new Date()];
-            const yMax = data.length ? d3.max(data, d => d.y) : 1;
-            const x = d3.scaleTime().range([0, w]).domain(xDomain);
-            const y = d3.scaleLinear().range([h, 0]).domain([0, yMax]).nice();
-
-            g.append("g").attr("transform", `translate(0,${h})`).call(d3.axisBottom(x));
-            g.append("g").call(d3.axisLeft(y));
-
-            if (!data.length) {
-                g.append("text")
-                    .attr("x", w/2).attr("y", h/2)
-                    .attr("text-anchor", "middle")
-                    .attr("fill", "#6c757d")
-                    .text("No data");
-                return;
-            }
-
-            const line = d3.line().x(d => x(d.x)).y(d => y(d.y));
-            g.append("path")
-              .datum(data)
-              .attr("fill", "none")
-              .attr("stroke", "#0d6efd")
-              .attr("stroke-width", 2)
-              .attr("d", line);
-
-            g.selectAll("circle")
-              .data(data).enter().append("circle")
-              .attr("r", 3)
-              .attr("fill", "#0d6efd")
-              .attr("cx", d => x(d.x))
-              .attr("cy", d => y(d.y));
         }
 
-        function DonutProgress(sel, completed, total) {
-            const size = 240, thick = 30;
-            const root = D3Base.makeSvg(sel, size, size, {top:0,right:0,bottom:0,left:0});
-            const g = root.svg.append("g").attr("transform", `translate(${size/2},${size/2})`);
-            const pct = total > 0 ? Math.max(0, Math.min(1, completed / total)) : 0;
-            const arc = d3.arc().innerRadius((size/2)-thick).outerRadius(size/2).startAngle(0);
+        // Initial draw: "All Concepts"
+        const allConcept = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            Model.Dashboard.Concepts.FirstOrDefault(c => c.ConceptId == "all") ?? Model.Dashboard.Concepts.First()
+        ));
+        drawDonut(allConcept.OverallProgress * 100);
 
-            g.append("path").datum({endAngle: 2*Math.PI}).attr("fill", "#e9ecef").attr("d", arc);
-            g.append("path").datum({endAngle: 2*Math.PI*pct}).attr("fill", "#198754").attr("d", arc);
-            g.append("text").attr("text-anchor","middle").attr("dy","0.35em").text(`${(pct*100).toFixed(1)}%`);
-        }
+        // Update on concept select
+        const conceptSel = document.getElementById("conceptSelectInsights");
+        const concepts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Dashboard.Concepts));
+        conceptSel.addEventListener("change", function () {
+            const selected = concepts.find(c => c.ConceptId === this.value) || concepts[0];
+            drawDonut((selected.OverallProgress ?? 0) * 100);
+        });
+    })();
 
-        // ---------- Donut ----------
-        (function(){
-            const donut = document.getElementById("progressDonut");
-            if (donut) DonutProgress("#progressDonut", +donut.dataset.completed || 0, 100);
-        })();
+        // ---------- Concept Insights (Trend) ----------
+        (function () {
+            const concepts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                Model.Dashboard.Concepts.Select(c => new {
+                    c.ConceptId,
+                    ConceptName = c.ConceptId switch {
+                        "sv" => "Speed and Velocity",
+                        "dd" => "Distance and Displacement",
+                        "ac" => "Acceleration",
+                        _ => c.ConceptName
+                    },
+                    c.AvgAttempts,
+                    c.AvgTime,
+                    c.AttemptsTrend,
+                    c.TimeTrend
+                })
+            ));
 
-        // ---------- Concept Insights (summary + trend) ----------
-        (function(){
-            const isOverall  = @Model.IsOverall.ToString().ToLower();
-            const classId    = "@(Model.CurrentClassId ?? 0)";
+            let selectedConcept = concepts[0];
+            let trendChart = null;
+
             const conceptSel = document.getElementById("conceptSelectInsights");
-            const btnA       = document.getElementById("btnConceptAttempts");
-            const btnT       = document.getElementById("btnConceptTime");
-            const valAttempts= document.getElementById("conceptAvgAttempts");
-            const valTime    = document.getElementById("conceptAvgTime");
+            const valAttempts = document.getElementById("conceptAvgAttempts");
+            const valTime = document.getElementById("conceptAvgTime");
+            const btnA = document.getElementById("btnConceptAttempts");
+            const btnT = document.getElementById("btnConceptTime");
+            const trendCanvas = document.getElementById("conceptTrend");
 
-            async function loadConceptSummary() {
-                const conceptId = conceptSel.value;
-                const url = isOverall
-                    ? `/api/analytics/overview/concept-summary?conceptId=${encodeURIComponent(conceptId)}`
-                    : `/api/analytics/class/${classId}/concept-summary?conceptId=${encodeURIComponent(conceptId)}`;
-                const r = await fetch(url);
-                const d = await r.json();
-                valAttempts.textContent = (d.avgAttempts ?? 0).toFixed(2);
-                const secs = Math.round(d.avgTimeSec ?? 0);
+            function updateConceptSummary(concept) {
+                valAttempts.textContent = (concept.AvgAttempts ?? 0).toFixed(2);
+                const secs = Math.round(concept.AvgTime ?? 0);
                 const m = Math.floor(secs / 60), s = secs % 60;
                 valTime.textContent = `${m} min ${s} sec`;
             }
 
-            async function drawTrend(metric) {
-                const conceptId = conceptSel.value;
-                const url = isOverall
-                    ? `/api/analytics/overview/trend?metric=${encodeURIComponent(metric)}&conceptId=${encodeURIComponent(conceptId)}`
-                    : `/api/analytics/class/${classId}/trend?metric=${encodeURIComponent(metric)}&conceptId=${encodeURIComponent(conceptId)}`;
-                const r = await fetch(url);
-                const series = await r.json();
-                LineChart("#conceptTrend", series);
+            function drawTrend(metric) {
+                const trendData = metric === "Attempts" ? selectedConcept.AttemptsTrend : selectedConcept.TimeTrend;
+                if (!trendData || !trendData.length) {
+                    trendCanvas.getContext('2d').clearRect(0, 0, trendCanvas.width, trendCanvas.height);
+                    return;
+                }
+                const labels = trendData.map(pt => pt.Date);
+                const data = trendData.map(pt => pt.Value);
+
+                if (trendChart) trendChart.destroy();
+                trendChart = new Chart(trendCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: metric === "Attempts" ? "Avg Attempts" : "Avg Time (sec)",
+                            data: data,
+                            borderColor: metric === "Attempts" ? "#fd7e14" : "#198754",
+                            backgroundColor: "rgba(0,0,0,0)",
+                            tension: 0.3,
+                            pointRadius: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: {
+                                title: { display: true, text: "Date" },
+                                ticks: { autoSkip: true, maxTicksLimit: 6 }
+                            },
+                            y: { title: { display: true, text: metric === "Attempts" ? "Attempts" : "Seconds" } }
+                        }
+                    }
+                });
             }
 
-            // init
-            loadConceptSummary();
+            // Init
+            updateConceptSummary(selectedConcept);
             drawTrend("Attempts");
 
-            // events
-            conceptSel.addEventListener("change", () => {
-                loadConceptSummary();
+            conceptSel.addEventListener("change", function () {
+                selectedConcept = concepts.find(c => c.ConceptId === this.value) || concepts[0];
+                updateConceptSummary(selectedConcept);
                 const metric = btnA.classList.contains("btn-primary") ? "Attempts" : "Time";
                 drawTrend(metric);
             });
-            btnA.addEventListener("click", () => {
+
+            btnA.addEventListener("click", function () {
                 btnA.classList.add("btn-primary"); btnA.classList.remove("btn-outline-primary");
                 btnT.classList.remove("btn-primary"); btnT.classList.add("btn-outline-primary");
                 drawTrend("Attempts");
             });
-            btnT.addEventListener("click", () => {
+
+            btnT.addEventListener("click", function () {
                 btnT.classList.add("btn-primary"); btnT.classList.remove("btn-outline-primary");
                 btnA.classList.remove("btn-primary"); btnA.classList.add("btn-outline-primary");
                 drawTrend("Time");
