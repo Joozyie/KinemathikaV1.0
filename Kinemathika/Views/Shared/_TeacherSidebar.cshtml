@@ -14,10 +14,8 @@
     <hr class="sidebar-hr" />
 
     <!-- Overall Overview quick jump -->
-    <a asp-controller="Teacher"
-       asp-action="Dashboard"
-       class="btn btn-sm btn-outline-light w-100 mb-3">
-        Overall Overview
+    <a asp-controller="Teacher" asp-action="Dashboard" class="btn btn-sm btn-outline-light w-100 mb-3">
+        All Class Overview
     </a>
 
 
@@ -32,7 +30,7 @@
 
                 <li class="d-flex align-items-center justify-content-between mb-2">
                     <a class="side-link flex-grow-1 @isActive"
-                       href="@Url.Action("Dashboard", "Teacher", new { classId = c.Id })">
+                        href="@Url.Action("Dashboard", "Teacher", new { classId = c.Id })">
                         <span class="name text-truncate me-2">@c.Name</span>
                         <span class="badge side-badge flex-shrink-0">@c.StudentCount</span>
                     </a>

@@ -13,7 +13,12 @@ namespace Kinemathika.Controllers
     public class TeacherController : Controller
     {
         private readonly AppDbContext _db;
-        public TeacherController(AppDbContext db) => _db = db;
+        private readonly RApiService _rApi;
+        public TeacherController(AppDbContext db, RApiService rApi)
+        {
+            _db = db;
+            _rApi = rApi;
+        }
 
         // Map concept codes to full names for all UI
         static readonly Dictionary<string, string> CodeToName = new(StringComparer.OrdinalIgnoreCase)
@@ -45,19 +50,18 @@ namespace Kinemathika.Controllers
                 RecentClasses = recent
             };
         }
-
+        // ---------- Dashboard ----------
         [HttpGet]
         public IActionResult Index() => RedirectToAction(nameof(Dashboard));
 
-        // ---------- Dashboard ----------
         [HttpGet]
         public async Task<IActionResult> Dashboard(int? classId = null)
         {
             ViewBag.Sidebar = await BuildSidebarAsync();
 
+            // Get student IDs
             IQueryable<string> studentIdsQuery;
             string? className = null;
-
             if (classId.HasValue)
             {
                 className = await _db.Classrooms
@@ -65,11 +69,6 @@ namespace Kinemathika.Controllers
                     .Select(c => c.ClassName)
                     .FirstOrDefaultAsync();
 
-                if (className == null) classId = null;
-            }
-
-            if (classId.HasValue)
-            {
                 studentIdsQuery = _db.Enrollments
                     .AsNoTracking()
                     .Where(e => e.ClassroomId == classId.Value)
@@ -84,144 +83,61 @@ namespace Kinemathika.Controllers
             }
 
             var studentIds = await studentIdsQuery.Distinct().ToListAsync();
-            var attempts = _db.AttemptRecords.AsNoTracking().Where(a => studentIds.Contains(a.StudentId));
 
-            // Overview KPIs (using mastery proxy ≤ 2)
-            var agg = await attempts.GroupBy(_ => 1)
-                .Select(g => new
-                {
-                    TotalAttempts = g.Count(),
-                    AvgAccuracy = (double?)g.Average(a => 1.0 / (double)(a.AttemptsToCorrect < 1 ? 1 : a.AttemptsToCorrect)),
-                    AvgCorrectMs = g.Select(a => (double?)a.TimeToCorrectMs).Average(),
-                    FirstTryCorrect = g.Count(a => a.AttemptsToCorrect == 1),
-                    Mastery = g.Count(a => a.AttemptsToCorrect <= 2),
-                    DistinctStudents = g.Select(a => a.StudentId).Distinct().Count()
-                })
-                .FirstOrDefaultAsync()
-                ?? new { TotalAttempts = 0, AvgAccuracy = (double?)0, AvgCorrectMs = (double?)0, FirstTryCorrect = 0, Mastery = 0, DistinctStudents = 0 };
-
-            // WHAT IT DOES: Avg progress for the current scope (overall or a single class).
-            var perStudentCompleted = await _db.AttemptRecords.AsNoTracking()
-                .Where(a => studentIds.Contains(a.StudentId) && a.AttemptsToCorrect <= 2)
-                .GroupBy(a => new { a.StudentId, a.ConceptId, a.ProblemNo })
-                .Select(g => g.Key.StudentId)
-                .GroupBy(s => s)
-                .Select(g => new { StudentId = g.Key, Completed = g.Count() })
-                .ToListAsync();
-
-            var completedMap = perStudentCompleted.ToDictionary(x => x.StudentId, x => x.Completed);
-            double avgProgress = studentIds.Count > 0
-                ? studentIds.Average(id => Math.Min(1.0, (completedMap.TryGetValue(id, out var c) ? c : 0) / 45.0))
-                : 0.0;
-
-            // Concept breakdown (labels converted after SQL)
-            var byConceptRaw = await attempts
-                .GroupBy(a => a.ConceptId)
-                .Select(g => new
-                {
-                    concept = g.Key,
-                    acc = g.Average(x => 1.0 / (double)(x.AttemptsToCorrect < 1 ? 1 : x.AttemptsToCorrect)),
-                    avgAttempts = g.Average(x => x.AttemptsToCorrect)
-                })
-                .OrderBy(x => x.concept)
-                .ToListAsync();
-
-            var byConcept = byConceptRaw
-                .Select(x => new
-                {
-                    concept = CodeToName.TryGetValue(x.concept, out var name) ? name : x.concept,
-                    avgAccPct = (int)Math.Round(x.acc * 100.0),
-                    x.avgAttempts
-                })
-                .ToList();
-
-            // Recent attempts table (materialize first; then map dictionary/format in memory)
-            var recentSql = await attempts
-                .OrderByDescending(a => a.EndedAt)
-                .Take(10)
+            // Fetch attempts, students, classes
+            var attempts = await _db.AttemptRecords.AsNoTracking()
+                .Where(a => studentIds.Contains(a.StudentId))
                 .Select(a => new
                 {
-                    a.EndedAt,
                     a.StudentId,
                     a.ConceptId,
                     a.ProblemNo,
                     a.AttemptsToCorrect,
-                    a.TimeToCorrectMs
+                    a.TimeToCorrectMs,
+                    a.EndedAt
                 })
                 .ToListAsync();
 
-            var recentAttempts = recentSql.Select(a => new RecentAttemptRow
-            {
-                EndedAt = a.EndedAt,
-                StudentId = a.StudentId,
-                ConceptId = CodeToName.TryGetValue(a.ConceptId, out var nm) ? nm : a.ConceptId,
-                ProblemId = a.ProblemNo.ToString(),
-                Status = a.AttemptsToCorrect <= 2 ? "Complete" : "Incomplete",
-                FirstTry = a.AttemptsToCorrect == 1,
-                Attempts = a.AttemptsToCorrect,
-                TimeSec = Math.Round(a.TimeToCorrectMs / 1000.0, 1)
-            }).ToList();
-
-            var overview = new TeacherOverviewVm
-            {
-                TotalStudents = agg.DistinctStudents,
-                TotalClasses = await _db.Classrooms.CountAsync(c => !c.IsArchived),
-                AvgAccuracy = Math.Round((decimal)(agg.AvgAccuracy ?? 0.0), 2),
-                AvgTimeToCorrectSec = Math.Round((agg.AvgCorrectMs ?? 0.0) / 1000.0, 1),
-                FirstTryCorrectRate = (agg.TotalAttempts > 0) ? Math.Round((decimal)agg.FirstTryCorrect / agg.TotalAttempts, 2) : 0m,
-                MasteryRate = (decimal)Math.Round(avgProgress, 2),
-                Concepts = byConcept.Select(x => x.concept).ToList(),
-                ConceptAvgAccuracyPct = byConcept.Select(x => x.avgAccPct).ToList(),
-                ConceptAvgAttempts = byConcept.Select(x => Math.Round(x.avgAttempts, 2)).ToList(),
-                RecentAttempts = recentAttempts
-            };
-
-            // Roster snapshot
             var studentsInfo = await _db.Students
                 .AsNoTracking()
                 .Where(s => studentIds.Contains(s.StudentId))
                 .Select(s => new { s.StudentId, s.Name, s.Email })
                 .ToListAsync();
 
-            var byStudent = await attempts
-                .GroupBy(a => a.StudentId)
-                .Select(g => new
-                {
-                    StudentId = g.Key,
-                    TotalAttempts = g.Count(),
-                    AvgAccuracy = g.Average(x => 1.0 / (double)(x.AttemptsToCorrect < 1 ? 1 : x.AttemptsToCorrect)),
-                    LastActive = (DateTime?)g.Max(x => x.EndedAt)
-                })
+            var classes = await _db.Classrooms
+                .AsNoTracking()
+                .Where(c => !c.IsArchived)
+                .Select(c => new { c.ClassroomId, c.ClassName })
                 .ToListAsync();
 
-            var studentRows = studentsInfo
-                .GroupJoin(byStudent, s => s.StudentId, a => a.StudentId, (s, g) => new { s, stat = g.FirstOrDefault() })
-                .Select(x => new StudentRowVm
-                {
-                    StudentId = x.s.StudentId,
-                    Name = string.IsNullOrWhiteSpace(x.s.Name) ? x.s.StudentId : x.s.Name,
-                    Email = x.s.Email ?? "",
-                    TotalAttempts = x.stat?.TotalAttempts ?? 0,
-                    AvgAccuracy = Math.Round((decimal)(x.stat?.AvgAccuracy ?? 0.0), 2),
-                    LastActive = x.stat?.LastActive
-                })
-                .OrderByDescending(r => r.LastActive ?? DateTime.MinValue)
-                .ThenBy(r => r.Name)
-                .ToList();
-
-            var vm = new TeacherDashboardVm
+            var rInput = new
             {
-                TeacherName = "Prof. Jane Doe",
-                Students = studentRows,
-                Report = new ReportVm { Bars = byConcept.Select(x => x.avgAccPct).ToList(), Labels = byConcept.Select(x => x.concept).ToList() },
-                Overview = overview,
-                CurrentClassId = classId,
-                CurrentClassName = className,
-                StudentTabs = new List<ClassStudentsVm>() // keep your tabs if you want; trimmed here
+                attempts,
+                students = studentsInfo,
+                classes,
+                classId,
+                className
             };
 
-            return View(vm);
+            // --- Call R API ---
+            var rResult = await _rApi.PostAsync<RDashboardOverviewVm>("overview", rInput);
+
+            // Map concepts: replace IDs with full names using your dictionary
+            foreach (var concept in rResult.Concepts)
+            {
+                concept.ConceptName = CodeToName.GetValueOrDefault(concept.ConceptId, concept.ConceptName);
+            }
+
+            // Wrap in TeacherOverviewVm
+            var vm = new TeacherOverviewVm
+            {
+                ClassName = className,
+                Dashboard = rResult
+            };
+
+            return View(vm); // now TotalClasses & TotalStudents are already included
         }
+
 
         // ---------- Student ----------
         [HttpGet]
