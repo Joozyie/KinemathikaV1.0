@@ -27,3 +27,17 @@ public class TrendPointVm
     public DateOnly Date { get; set; }
     public double Value { get; set; }
 }
+
+public class StudentPerformance
+{
+    public string StudentId { get; set; } = null!;
+    public string Name { get; set; } = null!;
+    public string Email { get; set; } = null!;
+
+    // Computed metrics
+    public double ProgressPct { get; set; }       // e.g., progress % for this student
+    public double AvgAttempts { get; set; }       // average attempts per problem
+    public double AvgTimeSec { get; set; }        // average time to complete per problem
+
+    public DateTime? LastActivity { get; set; }   // most recent attempt datetime
+}

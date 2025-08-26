@@ -6,6 +6,7 @@ namespace Kinemathika.ViewModels.Teacher
     {
         public string? ClassName { get; set; }
         public required RDashboardOverviewVm Dashboard { get; set; }
+        public List<StudentPerformance>? StudentPerformances { get; set; }
     }
 
 }
