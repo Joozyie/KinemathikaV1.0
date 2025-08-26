@@ -185,113 +185,89 @@ namespace Kinemathika.Controllers
         }
 
         // ---------- Student ----------
-        // [HttpGet]
-        // public async Task<IActionResult> Student(string studentId)
-        // {
-        //     if (string.IsNullOrWhiteSpace(studentId))
-        //         return RedirectToAction(nameof(Dashboard));
+        [HttpGet]
+        public async Task<IActionResult> Student(string studentId)
+        {
+            if (string.IsNullOrWhiteSpace(studentId))
+                return RedirectToAction(nameof(Dashboard));
 
-        //     ViewBag.Sidebar = await BuildSidebarAsync();
+            ViewBag.Sidebar = await BuildSidebarAsync();
 
-        //     var s = await _db.Students
-        //         .AsNoTracking()
-        //         .Where(x => x.StudentId == studentId)
-        //         .Select(x => new { x.StudentId, x.Name, x.Email })
-        //         .FirstOrDefaultAsync();
+            // Fetch student info
+            var student = await _db.Students
+                .AsNoTracking()
+                .Where(s => s.StudentId == studentId)
+                .Select(s => new { s.StudentId, s.Name, s.Email })
+                .FirstOrDefaultAsync();
 
-        //     if (s is null) { TempData["Toast"] = "Student not found."; return RedirectToAction(nameof(Dashboard)); }
+            if (student == null)
+            {
+                TempData["Toast"] = "Student not found.";
+                return RedirectToAction(nameof(Dashboard));
+            }
 
-        //     var attempts = _db.AttemptRecords.AsNoTracking().Where(a => a.StudentId == studentId);
+            // Fetch all attempts for this student
+            var attempts = await _db.AttemptRecords
+                .AsNoTracking()
+                .Where(a => a.StudentId == studentId)
+                .ToListAsync();
 
-        //     var agg = await attempts.GroupBy(_ => 1)
-        //         .Select(g => new
-        //         {
-        //             TotalAttempts = g.Count(),
-        //             AvgAttempts = g.Select(a => (double?)a.AttemptsToCorrect).Average(),
-        //             AvgCorrectMs = g.Select(a => (double?)a.TimeToCorrectMs).Average(),
-        //             FirstTry = g.Count(a => a.AttemptsToCorrect == 1),
-        //             Mastery = g.Count(a => a.AttemptsToCorrect <= 2)
-        //         })
-        //         .FirstOrDefaultAsync()
-        //         ?? new { TotalAttempts = 0, AvgAttempts = (double?)0.0, AvgCorrectMs = (double?)0.0, FirstTry = 0, Mastery = 0 };
+            // Prepare input for R script (same as dashboard but for single student)
+            var rInput = new
+            {
+                attempts,
+                students = new[] { student },
+                classes = new List<object>(), // not needed here
+                classId = (int?)null,
+                className = (string?)null
+            };
 
-        //     // True progress: distinct completed problems (≤ 2 tries) / 45
-        //     var completedDistinct = await attempts
-        //         .Where(a => a.AttemptsToCorrect <= 2)
-        //         .GroupBy(a => new { a.ConceptId, a.ProblemNo })
-        //         .Select(g => 1)
-        //         .CountAsync();
-        //     double progressRate = Math.Min(1.0, completedDistinct / 45.0);
+            var rResult = await _rApi.PostAsync<RDashboardOverviewVm>("overview", rInput);
 
-        //     // Concept breakdown
-        //     var byConceptRaw = await attempts
-        //         .GroupBy(a => a.ConceptId)
-        //         .Select(g => new
-        //         {
-        //             concept = g.Key,
-        //             acc = g.Average(x => 1.0 / (double)(x.AttemptsToCorrect < 1 ? 1 : x.AttemptsToCorrect)),
-        //             avgAttempts = g.Average(x => x.AttemptsToCorrect)
-        //         })
-        //         .OrderBy(x => x.concept)
-        //         .ToListAsync();
+            // Map concept codes to full names
+            foreach (var concept in rResult.Concepts)
+            {
+                concept.ConceptName = CodeToName.GetValueOrDefault(concept.ConceptId, concept.ConceptName);
+            }
 
-        //     var byConcept = byConceptRaw
-        //         .Select(x => new
-        //         {
-        //             concept = CodeToName.GetValueOrDefault(x.concept, x.concept),
-        //             avgAccPct = (int)Math.Round(x.acc * 100.0),
-        //             x.avgAttempts
-        //         })
-        //         .ToList();
+            // Recent attempts table
+            var recent = attempts
+                .OrderByDescending(a => a.EndedAt)
+                .Take(25)
+                .Select(a => new RecentAttemptRow
+                {
+                    EndedAt = a.EndedAt,
+                    StudentId = a.StudentId,
+                    ConceptId = CodeToName.GetValueOrDefault(a.ConceptId, a.ConceptId),
+                    ProblemId = a.ProblemNo.ToString(),
+                    Status = a.AttemptsToCorrect <= 2 ? "Complete" : "Incomplete",
+                    FirstTry = a.AttemptsToCorrect == 1,
+                    Attempts = a.AttemptsToCorrect,
+                    TimeSec = Math.Round(a.TimeToCorrectMs / 1000.0, 1)
+                })
+                .ToList();
 
-        //     // Recent attempts (materialize first; then label/format)
-        //     var recentSql = await attempts
-        //         .OrderByDescending(a => a.EndedAt)
-        //         .Take(25)
-        //         .Select(a => new
-        //         {
-        //             a.EndedAt,
-        //             a.StudentId,
-        //             a.ConceptId,
-        //             a.ProblemNo,
-        //             a.AttemptsToCorrect,
-        //             a.TimeToCorrectMs
-        //         })
-        //         .ToListAsync();
+            // Wrap into StudentOverviewVm (same structure as dashboard)
+            var vm = new StudentOverviewVm
+            {
+                StudentId = student.StudentId,
+                Name = string.IsNullOrWhiteSpace(student.Name) ? student.StudentId : student.Name,
+                Email = student.Email ?? "",
+                TotalAttempts = attempts.Count,
+                AvgAttemptsToCorrect = attempts.Any() ? Math.Round(attempts.Average(a => a.AttemptsToCorrect), 2) : 0.0,
+                AvgAccuracy = 0m, // optional
+                FirstTryRate = attempts.Any() ? Math.Round((decimal)attempts.Count(a => a.AttemptsToCorrect == 1) / attempts.Count, 2) : 0m,
+                MasteryRate = attempts.Any() ? Math.Round((decimal)attempts.Count(a => a.AttemptsToCorrect <= 2) / attempts.Count, 4) : 0m,
+                AvgTimeToCorrectSec = attempts.Any() ? Math.Round(attempts.Average(a => a.TimeToCorrectMs) / 1000.0, 1) : 0.0,
+                Concepts = rResult.Concepts.Select(c => c.ConceptName).ToList(),
+                ConceptAvgAccuracyPct = rResult.Concepts.Select(c => (int)Math.Round(c.OverallProgress * 100)).ToList(),
+                ConceptAvgAttempts = rResult.Concepts.Select(c => Math.Round(c.AvgAttempts, 2)).ToList(),
+                RecentAttempts = recent
+            };
 
-        //     var recent = recentSql.Select(a => new RecentAttemptRow
-        //     {
-        //         EndedAt = a.EndedAt,
-        //         StudentId = a.StudentId,
-        //         ConceptId = CodeToName.GetValueOrDefault(a.ConceptId, a.ConceptId),
-        //         ProblemId = a.ProblemNo.ToString(),
-        //         Status = a.AttemptsToCorrect <= 2 ? "Complete" : "Incomplete",
-        //         FirstTry = a.AttemptsToCorrect == 1,
-        //         Attempts = a.AttemptsToCorrect,
-        //         TimeSec = Math.Round(a.TimeToCorrectMs / 1000.0, 1)
-        //     }).ToList();
+            return View(vm);
+        }
 
-        //     var total = Math.Max(1, agg.TotalAttempts);
-
-        //     var vm = new StudentOverviewVm
-        //     {
-        //         StudentId = s.StudentId,
-        //         Name = string.IsNullOrWhiteSpace(s.Name) ? s.StudentId : s.Name,
-        //         Email = s.Email ?? "",
-        //         TotalAttempts = agg.TotalAttempts,
-        //         AvgAttemptsToCorrect = Math.Round(agg.AvgAttempts ?? 0.0, 2),
-        //         AvgAccuracy = 0m, // not shown on student page
-        //         FirstTryRate = Math.Round((decimal)agg.FirstTry / total, 2),
-        //         MasteryRate = (decimal)Math.Round(progressRate, 4), // used as "Progress" donut
-        //         AvgTimeToCorrectSec = Math.Round((agg.AvgCorrectMs ?? 0.0) / 1000.0, 1),
-        //         Concepts = byConcept.Select(x => x.concept).ToList(),
-        //         ConceptAvgAccuracyPct = byConcept.Select(x => x.avgAccPct).ToList(),
-        //         ConceptAvgAttempts = byConcept.Select(x => Math.Round(x.avgAttempts, 2)).ToList(),
-        //         RecentAttempts = recent
-        //     };
-
-        //     return View(vm);
-        // }
 
         // ---------- Student CRUD (uses StudentId PK + Enrollment(StudentId)) ----------
         [HttpPost, ValidateAntiForgeryToken]
