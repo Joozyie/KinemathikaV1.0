@@ -4,8 +4,7 @@
 @model Kinemathika.ViewModels.Teacher.SidebarVm
 
 @{
-    int? activeClassId = null;
-    if (int.TryParse(Context.Request.Query["classId"], out var qid)) activeClassId = qid;
+    string? activeClassId = Context.Request.Query["classId"];
 }
 
 <div class="teacher-side px-2">
@@ -26,7 +25,7 @@
         {
             foreach (var c in Model.RecentClasses)
             {
-                var isActive = activeClassId.HasValue && activeClassId == c.Id ? "is-active" : "";
+                var isActive = !string.IsNullOrEmpty(activeClassId) && activeClassId == c.Id ? "is-active" : "";
 
                 <li class="d-flex align-items-center justify-content-between mb-2">
                     <a class="side-link flex-grow-1 @isActive"

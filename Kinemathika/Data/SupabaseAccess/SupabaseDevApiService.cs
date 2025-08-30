@@ -1,6 +1,7 @@
 using RestSharp;
 using System.Text.Json;
 
+// FOR TESTING PURPOSES ONLY PLS NO USE IN PROD
 public class SupabaseDevApiService
 {
     private readonly RestClient _client;

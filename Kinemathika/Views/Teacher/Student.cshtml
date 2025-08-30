@@ -8,15 +8,16 @@
 
     Func<string, string> MapConceptName = id => id switch
     {
-        "sv" => "Speed & Velocity",
-        "dd" => "Distance & Displacement",
-        "acc" => "Acceleration",
+        "all" => "All Concepts",
+        "C101" => "Speed and Velocity",
+        "C102" => "Distance and Displacement",
+        "C103" => "Acceleration",
         _ => id
     };
 }
 
 @section PageTitle {
-    <div class="fw-bold mb-3">@Model.Name Overviews</div>
+    <div class="fw-bold mb-3">@Model.Name Overview</div>
 }
 
 <!-- KPI Row -->
@@ -66,10 +67,9 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div class="fw-semibold col-3">Select Concept</div>
                     <select id="conceptSelectInsights" class="form-select form-select-sm" style="min-width:280px;">
-                        <option value="all" selected>All Concepts</option>
                         @foreach (var c in Model.Concepts)
                         {
-                            <option value="@c">@MapConceptName(c)</option>
+                            <option value="@c.ConceptId">@MapConceptName(c.ConceptId)</option>
                         }
                     </select>
                 </div>
@@ -79,13 +79,21 @@
                     <div class="col-12 col-md-6">
                         <div class="kpi-tile kpi-orange text-center">
                             <div class="kpi-label small">Avg Attempts</div>
-                            <div class="kpi-value fw-bold fs-4" id="conceptAvgAttempts">0.00</div>
+                            <div class="kpi-value fw-bold fs-4" id="conceptAvgAttempts">
+                                @(Model.Concepts?.FirstOrDefault()?.AvgAttempts.ToString("0.00") ?? "0.00")
+                            </div>
                         </div>
                     </div>
                     <div class="col-12 col-md-6">
                         <div class="kpi-tile kpi-green text-center">
                             <div class="kpi-label small">Avg Time</div>
-                            <div class="kpi-value fw-bold fs-4" id="conceptAvgTime">0 min 0 sec</div>
+                            <div class="kpi-value fw-bold fs-4" id="conceptAvgTime">
+                                @{
+                                    var csecs = Model.Concepts?.FirstOrDefault()?.AvgTime ?? 0.0;
+                                    var ct = TimeSpan.FromSeconds(csecs);
+                                }
+                                @($"{(int)ct.TotalMinutes} min {ct.Seconds} sec")
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -107,10 +115,38 @@
 </div>
 
 <!-- Recent Attempts Table -->
+<style>
+    #recentAttemptsTable tbody tr {
+        height: 48px;
+    }
+
+    #recentAttemptsTable thead {
+        background-color: #f8f9fa;
+        color: #495057;
+    }
+
+    #recentAttemptsTable {
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    #recentAttemptsTable tbody tr:hover {
+        background-color: #f1f1f1;
+    }
+
+    .dataTables_paginate {
+        font-size: 0.875rem;
+    }
+
+    .dataTables_filter input {
+        border-radius: 0.375rem;
+        border: 1px solid #ced4da;
+        padding: 0.375rem;
+    }
+</style>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body">
         <div class="fw-bold fs-5 mb-3">Recent Attempts</div>
-
         <table class="table table-hover table-striped mb-3 mt-3" id="recentAttemptsTable">
             <thead class="table-light">
                 <tr>
@@ -157,83 +193,128 @@
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // ---------- Donut ----------
         (function () {
+            const concepts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Concepts ?? []));
+            if (!concepts.length) return; // exit if empty
+
             const donutCanvas = document.getElementById("studentDonut");
             const centerText = document.getElementById("donutCenterText");
             let donutChart = null;
 
+            const initialConcept = concepts.find(c => c.ConceptId === "all") || concepts[0];
+
             function drawDonut(progressPct) {
                 centerText.textContent = `Progress\n${Math.round(progressPct)}%`;
+
                 if (donutChart) {
                     donutChart.data.datasets[0].data = [progressPct, 100 - progressPct];
                     donutChart.update();
                 } else {
                     donutChart = new Chart(donutCanvas, {
                         type: 'doughnut',
-                        data: { datasets: [{ data: [progressPct, 100 - progressPct], backgroundColor: ['#198754', '#e9ecef'], borderWidth: 0 }] },
-                        options: { cutout: '72%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } } }
+                        data: {
+                            datasets: [{
+                                data: [progressPct, 100 - progressPct],
+                                backgroundColor: ['#198754', '#e9ecef'],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '72%',
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: { enabled: false }
+                            }
+                        }
                     });
                 }
             }
 
-            drawDonut(@Math.Round(Model.MasteryRate * 100));
-        })();
-
-        // ---------- Concept Insights Trend ----------
-        (function () {
-            const concepts = @Html.Raw(JsonSerializer.Serialize(Model.Concepts.Select(c => new { Concept = c })));
-            let selectedConcept = concepts[0];
-            const valAttempts = document.getElementById("conceptAvgAttempts");
-            const valTime = document.getElementById("conceptAvgTime");
-            const trendCanvas = document.getElementById("conceptTrend");
-            let trendChart = null;
-
-            function updateConceptSummary(avgAttempts = 0, avgTimeSec = 0) {
-                valAttempts.textContent = avgAttempts.toFixed(2);
-                const m = Math.floor(avgTimeSec / 60), s = Math.round(avgTimeSec % 60);
-                valTime.textContent = `${m} min ${s} sec`;
-            }
-
-            function drawTrend(metric) {
-                const conceptId = selectedConcept.Concept;
-                fetch(`/api/analytics/student/@Model.StudentId/trend?metric=${metric}&conceptId=${conceptId}`)
-                    .then(res => res.json())
-                    .then(series => {
-                        if (trendChart) trendChart.destroy();
-                        trendChart = new Chart(trendCanvas, {
-                            type: 'line',
-                            data: { labels: series.points.map(p => p.x), datasets: [{ label: metric, data: series.points.map(p => p.y), borderColor: '#198754', backgroundColor: 'rgba(0,0,0,0)', tension: 0.3, pointRadius: 3 }] },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'Date' } }, y: { title: { display: true, text: metric } } } }
-                        });
-                    });
-            }
+            drawDonut((initialConcept.OverallProgress ?? 0) * 100);
 
             const conceptSel = document.getElementById("conceptSelectInsights");
-            conceptSel.addEventListener("change", () => {
-                selectedConcept = concepts.find(c => c.Concept === conceptSel.value) || concepts[0];
-                fetch(`/api/analytics/student/@Model.StudentId/concept-summary?conceptId=${selectedConcept.Concept}`)
-                    .then(res => res.json())
-                    .then(d => {
-                        updateConceptSummary(d.avgAttempts ?? 0, d.avgTimeSec ?? 0);
-                        drawTrend("Attempts");
-                    });
+            conceptSel.addEventListener("change", function () {
+                const selected = concepts.find(c => c.ConceptId === this.value) || concepts[0];
+                drawDonut((selected.OverallProgress ?? 0) * 100);
+                updateConceptSummary(selected);
+                const metric = btnA.classList.contains("btn-primary") ? "Attempts" : "Time";
+                drawTrend(metric, selected);
             });
 
-            document.getElementById("btnConceptAttempts").addEventListener("click", () => drawTrend("Attempts"));
-            document.getElementById("btnConceptTime").addEventListener("click", () => drawTrend("Time"));
+            // --- Trend Chart ---
+            const valAttempts = document.getElementById("conceptAvgAttempts");
+            const valTime = document.getElementById("conceptAvgTime");
+            const btnA = document.getElementById("btnConceptAttempts");
+            const btnT = document.getElementById("btnConceptTime");
+            const trendCanvas = document.getElementById("conceptTrend");
+            let selectedConcept = initialConcept;
+            let trendChart = null;
 
-            // Initial load
-            fetch(`/api/analytics/student/@Model.StudentId/concept-summary?conceptId=all`)
-                .then(res => res.json())
-                .then(d => {
-                    updateConceptSummary(d.avgAttempts ?? 0, d.avgTimeSec ?? 0);
-                    drawTrend("Attempts");
+            function updateConceptSummary(concept) {
+                valAttempts.textContent = (concept.AvgAttempts ?? 0).toFixed(2);
+                const secs = Math.round(concept.AvgTime ?? 0);
+                valTime.textContent = `${Math.floor(secs / 60)} min ${secs % 60} sec`;
+            }
+
+            function drawTrend(metric, concept) {
+                const trendData = metric === "Attempts" ? concept.AttemptsTrend : concept.TimeTrend;
+                const ctx = trendCanvas.getContext('2d');
+                ctx.clearRect(0, 0, trendCanvas.width, trendCanvas.height);
+
+                if (!trendData?.length) return;
+
+                const labels = trendData.map(pt => pt.Date);
+                const data = trendData.map(pt => pt.Value);
+
+                if (trendChart) trendChart.destroy();
+                trendChart = new Chart(trendCanvas, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: metric === "Attempts" ? "Avg Attempts" : "Avg Time (sec)",
+                            data,
+                            borderColor: metric === "Attempts" ? "#fd7e14" : "#198754",
+                            backgroundColor: "rgba(0,0,0,0)",
+                            tension: 0.3,
+                            pointRadius: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { title: { display: true, text: "Date" }, ticks: { autoSkip: true, maxTicksLimit: 6 } },
+                            y: { title: { display: true, text: metric === "Attempts" ? "Attempts" : "Seconds" } }
+                        }
+                    }
                 });
+            }
 
-            // ---------- DataTables ----------
+            updateConceptSummary(selectedConcept);
+            drawTrend("Attempts", selectedConcept);
+
+            btnA.addEventListener("click", function () {
+                btnA.classList.add("btn-primary"); btnA.classList.remove("btn-outline-primary");
+                btnT.classList.remove("btn-primary"); btnT.classList.add("btn-outline-primary");
+                drawTrend("Attempts", selectedConcept);
+            });
+            btnT.addEventListener("click", function () {
+                btnT.classList.add("btn-primary"); btnT.classList.remove("btn-outline-primary");
+                btnA.classList.remove("btn-primary"); btnA.classList.add("btn-outline-primary");
+                drawTrend("Time", selectedConcept);
+            });
+
+            // DataTables
             $(document).ready(function () {
-                $('#recentAttemptsTable').DataTable({ pageLength: 10, lengthMenu: [5, 10, 25], responsive: true });
+                $('#recentAttemptsTable').DataTable({
+                    pageLength: 10,
+                    lengthMenu: [5, 10, 25],
+                    responsive: true
+                });
             });
         })();
     </script>

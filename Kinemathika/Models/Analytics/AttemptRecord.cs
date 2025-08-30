@@ -4,6 +4,11 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel;
 using Kinemathika.Models; // for Classroom/Student navs
 
+/* 
+    SUBJECT FOR DELETION
+    DOUBLE CHECK MATTTTTTTTTTTTTTTTTTT
+*/
+
 namespace Kinemathika.Models.Analytics
 {
     [Table("AttemptRecords")]
@@ -33,8 +38,8 @@ namespace Kinemathika.Models.Analytics
 
         [Column("ended_at")]
         public DateTime EndedAt { get; set; }
-      
-        [Column("problem_no")] 
+
+        [Column("problem_no")]
         public byte ProblemNo { get; set; } // 1..15
 
         // --- Navigation properties ---

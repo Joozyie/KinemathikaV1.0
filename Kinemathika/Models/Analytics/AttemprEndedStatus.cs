@@ -1,5 +1,11 @@
 ﻿// Models/Analytics/AttemptEndedStatus.cs
 // what it does: enum used by AttemptRecord.ended_status
+
+/* 
+    SUBJECT FOR DELETION
+    DOUBLE CHECK MATTTTTTTTTTTTTTTTTTT
+*/
+
 namespace Kinemathika.Models.Analytics
 {
     public enum AttemptEndedStatus

@@ -43,7 +43,7 @@ namespace Kinemathika.ViewModels.Teacher
 
     public class ClassCardVm
     {
-        public int Id { get; set; }
+        public string Id { get; set; }
         public string Name { get; set; } = "";
         public int StudentCount { get; set; }
         public decimal AverageAccuracy { get; set; } // 0-1

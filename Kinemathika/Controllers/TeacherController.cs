@@ -3,177 +3,182 @@
 // doing dictionary/formatting after materializing to memory.
 using Kinemathika.Data;
 using Kinemathika.ViewModels.Teacher;
-using Kinemathika.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Text;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace Kinemathika.Controllers
 {
     public class TeacherController : Controller
     {
-        private readonly AppDbContext _db;
+        private readonly SbDbContext _db;
         private readonly RApiService _rApi;
-        public TeacherController(AppDbContext db, RApiService rApi)
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        public TeacherController(SbDbContext db, RApiService rApi, IHttpContextAccessor httpContextAccessor)
         {
             _db = db;
             _rApi = rApi;
+            _httpContextAccessor = httpContextAccessor;
         }
 
-        // Map concept codes to full names for all UI
-        static readonly Dictionary<string, string> CodeToName = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["dd"] = "Distance & Displacement",
-            ["sv"] = "Speed & Velocity",
-            ["acc"] = "Acceleration"
-        };
-
-        // ---------- Sidebar helpers ----------
+        //Sidebar VM Builder
         private async Task<SidebarVm> BuildSidebarAsync()
         {
-            var recent = await _db.Classrooms
-                .AsNoTracking()
-                .Where(c => !c.IsArchived)
-                .OrderBy(c => c.ClassName)
-                .Select(c => new ClassCardVm
-                {
-                    Id = c.ClassroomId,
-                    Name = c.ClassName,
-                    StudentCount = _db.Enrollments.Count(e => e.ClassroomId == c.ClassroomId)
-                })
-                .Take(4)
-                .ToListAsync();
+            // Get teacher's ID + email from claims
+            var user = _httpContextAccessor.HttpContext?.User;
+            var userIdStr = user?.FindFirstValue(ClaimTypes.NameIdentifier);
+            var teacherName = user?.FindFirstValue(ClaimTypes.Email) ?? "Teacher";
 
-            return new SidebarVm
+            // Validate user ID
+            if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var teacherId))
+                throw new InvalidOperationException("User ID is missing or invalid.");
+            try
             {
-                TeacherName = "Prof. Jane Doe",
-                RecentClasses = recent
-            };
-        }
-        [HttpGet]
-        public async Task<IActionResult> Dashboard(int? classId = null)
-        {
-            ViewBag.Sidebar = await BuildSidebarAsync();
+                // 1. Fetch teacher's active classes (ordered by class name for now)
+                var classes = await _db.Classes
+                    .Where(c => c.TeacherInChargeId == teacherId && !c.IsArchived)
+                    .OrderBy(c => c.ClassName)
+                    .Select(c => new { c.ClassId, c.ClassName })
+                    .ToListAsync();
+                // If teacher has no classes
+                if (classes.Count == 0)
+                {
+                    return new SidebarVm
+                    {
+                        TeacherName = teacherName,
+                        RecentClasses = new List<ClassCardVm>()
+                    };
+                }
+                // 2. Get student counts
+                var classIds = classes.Select(c => c.ClassId).ToList();
+                var students = await _db.Students
+                    .Where(s => classIds.Contains(s.ClassId))
+                    .Select(s => s.ClassId)
+                    .ToListAsync();
+                var countsByClass = students
+                    .GroupBy(classId => classId)
+                    .ToDictionary(g => g.Key, g => g.Count());
+                // Build RecentClasses VM
+                var recentClasses = classes.Select(c => new ClassCardVm
+                {
+                    Id = c.ClassId.ToString(),
+                    Name = c.ClassName,
+                    StudentCount = countsByClass.TryGetValue(c.ClassId, out var cnt) ? cnt : 0
+                }).ToList();
 
-            IQueryable<string> studentIdsQuery;
+                return new SidebarVm
+                {
+                    TeacherName = teacherName,
+                    RecentClasses = recentClasses
+                };
+            }
+            catch (Exception ex)
+            {
+                // Log the error and return empty sidebar rather than crashing
+                // MATTTTTTTTTTTTTT LET'S REPLACE THIS SHIT WITH A PROPER LOGGING/MODAL JS LIBRARY
+                Console.WriteLine($"Error building sidebar: {ex.Message}");
+                return new SidebarVm
+                {
+                    TeacherName = teacherName,
+                    RecentClasses = new List<ClassCardVm>()
+                };
+            }
+        }
+
+        // --------- Dashboard ----------
+        [HttpGet]
+        [Authorize(Roles = "teacher")] // Example of attribute for page authorization (check if user has the proper role to view page)
+        public async Task<IActionResult> Dashboard(string? classId = null)
+        {
+            // Construct sidebar
+            var sidebar = await BuildSidebarAsync();
+            ViewBag.Sidebar = sidebar;
+
+            // Initialize variables
             string? className = null;
             List<StudentPerformance>? studentPerformances = null;
+            // Lists for R input
+            List<RStudentDto> studentsForR = new();
+            List<RAttemptDto> attemptsForR = new();
 
-            // ---------------------- Fetch student IDs ----------------------
-            if (classId.HasValue)
+            // Collect classIds depending on single class / all classes
+            List<Guid> targetClassIds = string.IsNullOrEmpty(classId)
+                ? sidebar.RecentClasses.Select(c => Guid.Parse(c.Id)).ToList() // All Classes
+                : new List<Guid> { Guid.Parse(classId) }; // Specific Class
+
+            // ---------- Fetch students + attempts ----------
+            if (targetClassIds.Any())
             {
-                className = await _db.Classrooms
-                    .Where(c => c.ClassroomId == classId.Value)
-                    .Select(c => c.ClassName)
-                    .FirstOrDefaultAsync();
-
-                studentIdsQuery = _db.Enrollments
-                    .AsNoTracking()
-                    .Where(e => e.ClassroomId == classId.Value)
-                    .Select(e => e.StudentId);
-
-                var studentIdsList = await studentIdsQuery.Distinct().ToListAsync();
-
-                // Fetch students info
-                var studentsInfo = await _db.Students
-                    .AsNoTracking()
-                    .Where(s => studentIdsList.Contains(s.StudentId))
-                    .Select(s => new { s.StudentId, s.Name, s.Email })
+                // ---------- Students ----------
+                var students = await _db.Students
+                    .Where(s => targetClassIds.Contains(s.ClassId)) // Get all students for the target classes (all or one)
                     .ToListAsync();
 
-                // Fetch attempts for class students
-                var attempts = await _db.AttemptRecords
-                    .AsNoTracking()
-                    .Where(a => studentIdsList.Contains(a.StudentId))
-                    .Select(a => new
-                    {
-                        a.StudentId,
-                        a.ConceptId,
-                        a.ProblemNo,
-                        a.AttemptsToCorrect,
-                        a.TimeToCorrectMs,
-                        a.EndedAt
-                    })
-                    .ToListAsync();
+                var studentIds = students.Select(s => s.UserId).ToList(); // convert to student ids
 
-                // ---------------------- Per-student aggregation in C# ----------------------
-                studentPerformances = studentsInfo
-                    .Select(s =>
-                    {
-                        var a = attempts.Where(x => x.StudentId == s.StudentId).ToList();
-                        var total = Math.Max(1, a.Count);
+                studentsForR = students.Select(s => new RStudentDto
+                {
+                    StudentId = s.UserId.ToString(),
+                    Name = s.UserId.ToString(),
+                    Email = "" // map if available
+                }).ToList();
 
-                        // Progress: distinct completed problems ≤2 tries
-                        var completed = a
-                            .Where(x => x.AttemptsToCorrect <= 2)
-                            .GroupBy(x => new { x.ConceptId, x.ProblemNo })
+                // ---------- Attempts ----------
+                if (studentIds.Any())
+                {
+                    var attempts = await _db.ProblemAttempts
+                        .Where(a => studentIds.Contains(a.UserId))
+                        .ToListAsync();
+
+                    attemptsForR = attempts.Select(a => new RAttemptDto
+                    {
+                        StudentId = a.UserId.ToString(),
+                        ConceptId = a.ConceptId,
+                        ProblemNo = a.ProblemId,
+                        AttemptsToCorrect = a.AttemptsToCorrect,
+                        TimeToCorrectMs = a.TimeToCorrectMs,
+                        EndedAt = a.EndedAt
+                    }).ToList();
+                }
+
+                // ---------- Single class aggregations ----------
+                if (!string.IsNullOrEmpty(classId))
+                {
+                    var selectedClass = sidebar.RecentClasses.FirstOrDefault(c => c.Id == classId);
+                    className = selectedClass?.Name;
+
+                    studentPerformances = studentsForR.Select(s =>
+                    {
+                        var studentAttempts = attemptsForR.Where(a => a.StudentId == s.StudentId).ToList();
+                        var completed = studentAttempts
+                            .Where(a => a.AttemptsToCorrect <= 2)
+                            .GroupBy(a => new { a.ConceptId, a.ProblemNo })
                             .Count();
 
                         return new StudentPerformance
                         {
                             StudentId = s.StudentId,
-                            Name = string.IsNullOrWhiteSpace(s.Name) ? s.StudentId : s.Name,
-                            Email = s.Email ?? "",
+                            Name = s.Name,
+                            Email = s.Email,
                             ProgressPct = Math.Min(1.0, completed / 45.0) * 100,
-                            AvgAttempts = a.Any() ? a.Average(x => x.AttemptsToCorrect) : 0.0,
-                            AvgTimeSec = a.Any() ? a.Average(x => x.TimeToCorrectMs) / 1000.0 : 0.0,
+                            AvgAttempts = studentAttempts.Any() ? studentAttempts.Average(a => a.AttemptsToCorrect) : 0.0,
+                            AvgTimeSec = studentAttempts.Any() ? studentAttempts.Average(a => a.TimeToCorrectMs) / 1000.0 : 0.0
                         };
-                    })
-                    .ToList();
-            }
-            else
-            {
-                studentIdsQuery = _db.Enrollments
-                    .AsNoTracking()
-                    .Where(e => !e.Classroom.IsArchived)
-                    .Select(e => e.StudentId);
+                    }).ToList();
+                }
             }
 
-            var studentIds = await studentIdsQuery.Distinct().ToListAsync();
-
-            // ---------------------- Dashboard-level aggregation via R ----------------------
-            var attemptsAll = await _db.AttemptRecords.AsNoTracking()
-                .Where(a => studentIds.Contains(a.StudentId))
-                .Select(a => new
-                {
-                    a.StudentId,
-                    a.ConceptId,
-                    a.ProblemNo,
-                    a.AttemptsToCorrect,
-                    a.TimeToCorrectMs,
-                    a.EndedAt
-                })
-                .ToListAsync();
-
-            var studentsInfoAll = await _db.Students
-                .AsNoTracking()
-                .Where(s => studentIds.Contains(s.StudentId))
-                .Select(s => new { s.StudentId, s.Name, s.Email })
-                .ToListAsync();
-
-            var classes = await _db.Classrooms
-                .AsNoTracking()
-                .Where(c => !c.IsArchived)
-                .Select(c => new { c.ClassroomId, c.ClassName })
-                .ToListAsync();
-
+            // ---------- R Request preparation ----------
             var rInput = new
             {
-                attempts = attemptsAll,
-                students = studentsInfoAll,
-                classes,
+                attempts = attemptsForR,
+                students = studentsForR,
+                classes = sidebar.RecentClasses,
                 classId,
                 className
             };
-
             var rResult = await _rApi.PostAsync<RDashboardOverviewVm>("overview", rInput);
-
-            foreach (var concept in rResult.Concepts)
-            {
-                concept.ConceptName = CodeToName.GetValueOrDefault(concept.ConceptId, concept.ConceptName);
-            }
-
-            // ---------------------- Wrap into ViewModel ----------------------
             var vm = new TeacherOverviewVm
             {
                 ClassName = className,
@@ -181,11 +186,13 @@ namespace Kinemathika.Controllers
                 StudentPerformances = studentPerformances
             };
 
+            ViewBag.ClassId = classId ?? ""; // simple assignment for class-specific or all-class 
             return View(vm);
         }
 
         // ---------- Student ----------
         [HttpGet]
+        [Authorize(Roles = "teacher")]
         public async Task<IActionResult> Student(string studentId)
         {
             if (string.IsNullOrWhiteSpace(studentId))
@@ -193,11 +200,16 @@ namespace Kinemathika.Controllers
 
             ViewBag.Sidebar = await BuildSidebarAsync();
 
-            // Fetch student info
+            // ---------- Fetch student ----------
             var student = await _db.Students
                 .AsNoTracking()
-                .Where(s => s.StudentId == studentId)
-                .Select(s => new { s.StudentId, s.Name, s.Email })
+                .Where(s => s.UserId.ToString() == studentId || s.StudentNumber == studentId)
+                .Select(s => new RStudentDto
+                {
+                    StudentId = s.UserId.ToString(),
+                    Name = string.IsNullOrWhiteSpace(s.StudentNumber) ? s.UserId.ToString() : s.StudentNumber,
+                    Email = "" // accounts.student doesn’t have email; fill in if available elsewhere
+                })
                 .FirstOrDefaultAsync();
 
             if (student == null)
@@ -206,40 +218,44 @@ namespace Kinemathika.Controllers
                 return RedirectToAction(nameof(Dashboard));
             }
 
-            // Fetch all attempts for this student
-            var attempts = await _db.AttemptRecords
+            // ---------- Fetch attempts ----------
+            var attempts = await _db.ProblemAttempts
                 .AsNoTracking()
-                .Where(a => a.StudentId == studentId)
+                .Where(a => a.UserId.ToString() == student.StudentId)
+                .Select(a => new RAttemptDto
+                {
+                    StudentId = a.UserId.ToString(),
+                    ConceptId = a.ConceptId,
+                    ProblemNo = a.ProblemId,
+                    AttemptsToCorrect = a.AttemptsToCorrect,
+                    TimeToCorrectMs = a.TimeToCorrectMs,
+                    EndedAt = a.EndedAt
+                })
                 .ToListAsync();
 
-            // Prepare input for R script (same as dashboard but for single student)
+            // ---------- Send to R ----------
             var rInput = new
             {
                 attempts,
                 students = new[] { student },
                 classes = new List<object>(), // not needed here
-                classId = (int?)null,
+                classId = (string?)null,
                 className = (string?)null
             };
 
             var rResult = await _rApi.PostAsync<RDashboardOverviewVm>("overview", rInput);
 
-            // Map concept codes to full names
-            foreach (var concept in rResult.Concepts)
-            {
-                concept.ConceptName = CodeToName.GetValueOrDefault(concept.ConceptId, concept.ConceptName);
-            }
-
-            // Recent attempts table
+            // ---------- Recent attempts ----------
             var recent = attempts
                 .OrderByDescending(a => a.EndedAt)
                 .Take(25)
                 .Select(a => new RecentAttemptRow
                 {
-                    EndedAt = a.EndedAt,
+                    EndedAt = a.EndedAt ?? DateTime.MinValue,
                     StudentId = a.StudentId,
-                    ConceptId = CodeToName.GetValueOrDefault(a.ConceptId, a.ConceptId),
-                    ProblemId = a.ProblemNo.ToString(),
+                    ConceptId = a.ConceptId,
+                    // ConceptId = CodeToName.GetValueOrDefault(a.ConceptId, a.ConceptId),
+                    ProblemId = a.ProblemNo,
                     Status = a.AttemptsToCorrect <= 2 ? "Complete" : "Incomplete",
                     FirstTry = a.AttemptsToCorrect == 1,
                     Attempts = a.AttemptsToCorrect,
@@ -247,297 +263,308 @@ namespace Kinemathika.Controllers
                 })
                 .ToList();
 
-            // Wrap into StudentOverviewVm (same structure as dashboard)
+            // ---------- Build VM ----------
             var vm = new StudentOverviewVm
             {
                 StudentId = student.StudentId,
-                Name = string.IsNullOrWhiteSpace(student.Name) ? student.StudentId : student.Name,
-                Email = student.Email ?? "",
+                Name = student.Name,
+                Email = student.Email,
                 TotalAttempts = attempts.Count,
                 AvgAttemptsToCorrect = attempts.Any() ? Math.Round(attempts.Average(a => a.AttemptsToCorrect), 2) : 0.0,
-                AvgAccuracy = 0m, // optional
+                AvgAccuracy = 0m, // legacy, remove? or maybe not? idk
                 FirstTryRate = attempts.Any() ? Math.Round((decimal)attempts.Count(a => a.AttemptsToCorrect == 1) / attempts.Count, 2) : 0m,
                 MasteryRate = attempts.Any() ? Math.Round((decimal)attempts.Count(a => a.AttemptsToCorrect <= 2) / attempts.Count, 4) : 0m,
                 AvgTimeToCorrectSec = attempts.Any() ? Math.Round(attempts.Average(a => a.TimeToCorrectMs) / 1000.0, 1) : 0.0,
-                Concepts = rResult.Concepts.Select(c => c.ConceptName).ToList(),
-                ConceptAvgAccuracyPct = rResult.Concepts.Select(c => (int)Math.Round(c.OverallProgress * 100)).ToList(),
-                ConceptAvgAttempts = rResult.Concepts.Select(c => Math.Round(c.AvgAttempts, 2)).ToList(),
+                Concepts = rResult.Concepts.Select(c => new ConceptProgressVm
+                {
+                    ConceptId = c.ConceptId,
+                    ConceptName = c.ConceptId,
+                    OverallProgress = c.OverallProgress,
+                    AvgAttempts = Math.Round(c.AvgAttempts, 2),
+                    AvgTime = Math.Round(c.AvgTime, 2),
+                    AttemptsTrend = c.AttemptsTrend,
+                    TimeTrend = c.TimeTrend
+                }).ToList(),
                 RecentAttempts = recent
             };
 
             return View(vm);
         }
 
+        // Temp Cutoff Point
+        // Ples fix mattttttttttttttttttttttt
 
-        // ---------- Student CRUD (uses StudentId PK + Enrollment(StudentId)) ----------
-        [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateStudent(int? classId, string name, string email, bool isActive = true)
-        {
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email))
-                return RedirectToAction(nameof(Dashboard), new { classId });
 
-            var student = await _db.Students.FirstOrDefaultAsync(s => s.Email == email);
-            if (student == null)
-            {
-                var newId = "stu_" + Guid.NewGuid().ToString("N")[..6];
-                student = new Student { StudentId = newId, Name = name.Trim(), Email = email.Trim() };
-                _db.Students.Add(student);
-                await _db.SaveChangesAsync();
-            }
-            else
-            {
-                student.Name = name.Trim();
-                await _db.SaveChangesAsync();
-            }
+        // // ---------- Student CRUD (uses StudentId PK + Enrollment(StudentId)) ----------
+        // [HttpPost, ValidateAntiForgeryToken]
+        // public async Task<IActionResult> CreateStudent(int? classId, string name, string email, bool isActive = true)
+        // {
+        //     if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email))
+        //         return RedirectToAction(nameof(Dashboard), new { classId });
 
-            if (classId.HasValue)
-            {
-                bool hasEnroll = await _db.Enrollments.AnyAsync(e => e.ClassroomId == classId.Value && e.StudentId == student.StudentId);
-                if (!hasEnroll)
-                {
-                    _db.Enrollments.Add(new Enrollment { ClassroomId = classId.Value, StudentId = student.StudentId });
-                    await _db.SaveChangesAsync();
-                }
-            }
+        //     var student = await _db.Students.FirstOrDefaultAsync(s => s.Email == email);
+        //     if (student == null)
+        //     {
+        //         var newId = "stu_" + Guid.NewGuid().ToString("N")[..6];
+        //         student = new Student { StudentId = newId, Name = name.Trim(), Email = email.Trim() };
+        //         _db.Students.Add(student);
+        //         await _db.SaveChangesAsync();
+        //     }
+        //     else
+        //     {
+        //         student.Name = name.Trim();
+        //         await _db.SaveChangesAsync();
+        //     }
 
-            return RedirectToAction(nameof(Dashboard), new { classId });
-        }
+        //     if (classId.HasValue)
+        //     {
+        //         bool hasEnroll = await _db.Enrollments.AnyAsync(e => e.ClassroomId == classId.Value && e.StudentId == student.StudentId);
+        //         if (!hasEnroll)
+        //         {
+        //             _db.Enrollments.Add(new Enrollment { ClassroomId = classId.Value, StudentId = student.StudentId });
+        //             await _db.SaveChangesAsync();
+        //         }
+        //     }
 
-        [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditStudent(string id, int? classId, string name, string email, bool isActive = true)
-        {
-            if (string.IsNullOrWhiteSpace(id))
-                return RedirectToAction(nameof(Dashboard), new { classId });
+        //     return RedirectToAction(nameof(Dashboard), new { classId });
+        // }
 
-            var s = await _db.Students.FirstOrDefaultAsync(x => x.StudentId == id);
-            if (s == null) return RedirectToAction(nameof(Dashboard), new { classId });
+        // [HttpPost, ValidateAntiForgeryToken]
+        // public async Task<IActionResult> EditStudent(string id, int? classId, string name, string email, bool isActive = true)
+        // {
+        //     if (string.IsNullOrWhiteSpace(id))
+        //         return RedirectToAction(nameof(Dashboard), new { classId });
 
-            s.Name = (name ?? "").Trim();
-            s.Email = (email ?? "").Trim();
-            await _db.SaveChangesAsync();
+        //     var s = await _db.Students.FirstOrDefaultAsync(x => x.StudentId == id);
+        //     if (s == null) return RedirectToAction(nameof(Dashboard), new { classId });
 
-            if (classId.HasValue)
-            {
-                bool hasEnroll = await _db.Enrollments.AnyAsync(e => e.ClassroomId == classId.Value && e.StudentId == s.StudentId);
-                if (!hasEnroll)
-                {
-                    _db.Enrollments.Add(new Enrollment { ClassroomId = classId.Value, StudentId = s.StudentId });
-                    await _db.SaveChangesAsync();
-                }
-            }
+        //     s.Name = (name ?? "").Trim();
+        //     s.Email = (email ?? "").Trim();
+        //     await _db.SaveChangesAsync();
 
-            return RedirectToAction(nameof(Dashboard), new { classId });
-        }
+        //     if (classId.HasValue)
+        //     {
+        //         bool hasEnroll = await _db.Enrollments.AnyAsync(e => e.ClassroomId == classId.Value && e.StudentId == s.StudentId);
+        //         if (!hasEnroll)
+        //         {
+        //             _db.Enrollments.Add(new Enrollment { ClassroomId = classId.Value, StudentId = s.StudentId });
+        //             await _db.SaveChangesAsync();
+        //         }
+        //     }
 
-        [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteStudent(string id, int? classId)
-        {
-            if (string.IsNullOrWhiteSpace(id))
-                return RedirectToAction(nameof(Dashboard), new { classId });
+        //     return RedirectToAction(nameof(Dashboard), new { classId });
+        // }
 
-            var s = await _db.Students.FirstOrDefaultAsync(x => x.StudentId == id);
-            if (s == null) return RedirectToAction(nameof(Dashboard), new { classId });
+        // [HttpPost, ValidateAntiForgeryToken]
+        // public async Task<IActionResult> DeleteStudent(string id, int? classId)
+        // {
+        //     if (string.IsNullOrWhiteSpace(id))
+        //         return RedirectToAction(nameof(Dashboard), new { classId });
 
-            if (classId.HasValue)
-            {
-                var enroll = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == classId.Value && e.StudentId == s.StudentId);
-                if (enroll != null)
-                {
-                    _db.Enrollments.Remove(enroll);
-                    await _db.SaveChangesAsync();
-                }
-            }
-            else
-            {
-                var allEnroll = _db.Enrollments.Where(e => e.StudentId == s.StudentId);
-                _db.Enrollments.RemoveRange(allEnroll);
-                _db.Students.Remove(s);
-                await _db.SaveChangesAsync();
-            }
+        //     var s = await _db.Students.FirstOrDefaultAsync(x => x.StudentId == id);
+        //     if (s == null) return RedirectToAction(nameof(Dashboard), new { classId });
 
-            return RedirectToAction(nameof(Dashboard), new { classId });
-        }
+        //     if (classId.HasValue)
+        //     {
+        //         var enroll = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == classId.Value && e.StudentId == s.StudentId);
+        //         if (enroll != null)
+        //         {
+        //             _db.Enrollments.Remove(enroll);
+        //             await _db.SaveChangesAsync();
+        //         }
+        //     }
+        //     else
+        //     {
+        //         var allEnroll = _db.Enrollments.Where(e => e.StudentId == s.StudentId);
+        //         _db.Enrollments.RemoveRange(allEnroll);
+        //         _db.Students.Remove(s);
+        //         await _db.SaveChangesAsync();
+        //     }
 
-        // ---------- Classes list ----------
-        [HttpGet]
-        public async Task<IActionResult> Classes(bool archived = false)
-        {
-            ViewBag.Sidebar = await BuildSidebarAsync();
+        //     return RedirectToAction(nameof(Dashboard), new { classId });
+        // }
 
-            var classes = await _db.Classrooms
-                .AsNoTracking()
-                .Where(c => c.IsArchived == archived)
-                .OrderBy(c => c.ClassName)
-                .Select(c => new ClassCardVm
-                {
-                    Id = c.ClassroomId,
-                    Name = c.ClassName,
-                    StudentCount = _db.Enrollments.Count(e => e.ClassroomId == c.ClassroomId),
-                    AverageAccuracy = 0m,
-                    AvgTimeSpent = ""
-                })
-                .ToListAsync();
+        // // ---------- Classes list ----------
+        // [HttpGet]
+        // public async Task<IActionResult> Classes(bool archived = false)
+        // {
+        //     ViewBag.Sidebar = await BuildSidebarAsync();
 
-            var vm = new TeacherClassesVm
-            {
-                TeacherName = "Prof. Jane Doe",
-                Archived = archived,
-                Classes = classes
-            };
-            return View(vm);
-        }
+        //     var classes = await _db.Classrooms
+        //         .AsNoTracking()
+        //         .Where(c => c.IsArchived == archived)
+        //         .OrderBy(c => c.ClassName)
+        //         .Select(c => new ClassCardVm
+        //         {
+        //             Id = c.ClassroomId,
+        //             Name = c.ClassName,
+        //             StudentCount = _db.Enrollments.Count(e => e.ClassroomId == c.ClassroomId),
+        //             AverageAccuracy = 0m,
+        //             AvgTimeSpent = ""
+        //         })
+        //         .ToListAsync();
 
-        // ---------- Class management (rename/archive/unarchive) ----------
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RenameClass(int id, string newName, string? returnUrl)
-        {
-            if (string.IsNullOrWhiteSpace(newName))
-            {
-                TempData["Toast"] = "Class name is required.";
-                return SafeBack(returnUrl, nameof(Classes));
-            }
+        //     var vm = new TeacherClassesVm
+        //     {
+        //         TeacherName = "Prof. Jane Doe",
+        //         Archived = archived,
+        //         Classes = classes
+        //     };
+        //     return View(vm);
+        // }
 
-            var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.ClassroomId == id);
-            if (cls == null)
-            {
-                TempData["Toast"] = "Class not found.";
-                return SafeBack(returnUrl, nameof(Classes));
-            }
+        // // ---------- Class management (rename/archive/unarchive) ----------
+        // [HttpPost]
+        // [ValidateAntiForgeryToken]
+        // public async Task<IActionResult> RenameClass(int id, string newName, string? returnUrl)
+        // {
+        //     if (string.IsNullOrWhiteSpace(newName))
+        //     {
+        //         TempData["Toast"] = "Class name is required.";
+        //         return SafeBack(returnUrl, nameof(Classes));
+        //     }
 
-            var exists = await _db.Classrooms
-                .AnyAsync(c => c.ClassroomId != id && c.ClassName.ToLower() == newName.Trim().ToLower());
-            if (exists)
-            {
-                TempData["Toast"] = "A class with that name already exists.";
-                return SafeBack(returnUrl, nameof(Classes));
-            }
+        //     var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.ClassroomId == id);
+        //     if (cls == null)
+        //     {
+        //         TempData["Toast"] = "Class not found.";
+        //         return SafeBack(returnUrl, nameof(Classes));
+        //     }
 
-            cls.ClassName = newName.Trim();
-            await _db.SaveChangesAsync();
-            TempData["Toast"] = "Class renamed.";
-            return SafeBack(returnUrl, nameof(Classes));
-        }
+        //     var exists = await _db.Classrooms
+        //         .AnyAsync(c => c.ClassroomId != id && c.ClassName.ToLower() == newName.Trim().ToLower());
+        //     if (exists)
+        //     {
+        //         TempData["Toast"] = "A class with that name already exists.";
+        //         return SafeBack(returnUrl, nameof(Classes));
+        //     }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Archive(int id, string? confirmName, string? returnUrl)
-        {
-            var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.ClassroomId == id);
-            if (cls == null)
-            {
-                TempData["Toast"] = "Class not found.";
-                return SafeBack(returnUrl, nameof(Classes));
-            }
+        //     cls.ClassName = newName.Trim();
+        //     await _db.SaveChangesAsync();
+        //     TempData["Toast"] = "Class renamed.";
+        //     return SafeBack(returnUrl, nameof(Classes));
+        // }
 
-            // Require exact match (modal UX)
-            if (!string.Equals(cls.ClassName, confirmName ?? string.Empty, StringComparison.Ordinal))
-            {
-                TempData["Toast"] = "Name confirmation does not match.";
-                return SafeBack(returnUrl, nameof(Classes));
-            }
+        // [HttpPost]
+        // [ValidateAntiForgeryToken]
+        // public async Task<IActionResult> Archive(int id, string? confirmName, string? returnUrl)
+        // {
+        //     var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.ClassroomId == id);
+        //     if (cls == null)
+        //     {
+        //         TempData["Toast"] = "Class not found.";
+        //         return SafeBack(returnUrl, nameof(Classes));
+        //     }
 
-            if (!cls.IsArchived)
-            {
-                cls.IsArchived = true;
-                await _db.SaveChangesAsync();
-                TempData["Toast"] = $"Archived: {cls.ClassName}";
-            }
-            return SafeBack(returnUrl, nameof(Classes), new { archived = false });
-        }
+        //     // Require exact match (modal UX)
+        //     if (!string.Equals(cls.ClassName, confirmName ?? string.Empty, StringComparison.Ordinal))
+        //     {
+        //         TempData["Toast"] = "Name confirmation does not match.";
+        //         return SafeBack(returnUrl, nameof(Classes));
+        //     }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Unarchive(int id, string? returnUrl)
-        {
-            var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.ClassroomId == id);
-            if (cls == null)
-            {
-                TempData["Toast"] = "Class not found.";
-                return SafeBack(returnUrl, nameof(Classes), new { archived = true });
-            }
+        //     if (!cls.IsArchived)
+        //     {
+        //         cls.IsArchived = true;
+        //         await _db.SaveChangesAsync();
+        //         TempData["Toast"] = $"Archived: {cls.ClassName}";
+        //     }
+        //     return SafeBack(returnUrl, nameof(Classes), new { archived = false });
+        // }
 
-            if (cls.IsArchived)
-            {
-                cls.IsArchived = false;
-                await _db.SaveChangesAsync();
-                TempData["Toast"] = $"Restored: {cls.ClassName}";
-            }
-            return SafeBack(returnUrl, nameof(Classes), new { archived = false });
-        }
+        // [HttpPost]
+        // [ValidateAntiForgeryToken]
+        // public async Task<IActionResult> Unarchive(int id, string? returnUrl)
+        // {
+        //     var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.ClassroomId == id);
+        //     if (cls == null)
+        //     {
+        //         TempData["Toast"] = "Class not found.";
+        //         return SafeBack(returnUrl, nameof(Classes), new { archived = true });
+        //     }
 
-        // Small helper to safely redirect back
-        private IActionResult SafeBack(string? returnUrl, string fallbackAction, object? routeValues = null)
-            => (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                ? Redirect(returnUrl!)
-                : RedirectToAction(fallbackAction, routeValues);
+        //     if (cls.IsArchived)
+        //     {
+        //         cls.IsArchived = false;
+        //         await _db.SaveChangesAsync();
+        //         TempData["Toast"] = $"Restored: {cls.ClassName}";
+        //     }
+        //     return SafeBack(returnUrl, nameof(Classes), new { archived = false });
+        // }
 
-        // ---------- Wizard/Settings/Help ----------
-        [HttpGet]
-        public async Task<IActionResult> Create()
-        {
-            ViewBag.Sidebar = await BuildSidebarAsync();
-            return View(new CreateClassStep1Vm());
-        }
+        // // Small helper to safely redirect back
+        // private IActionResult SafeBack(string? returnUrl, string fallbackAction, object? routeValues = null)
+        //     => (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+        //         ? Redirect(returnUrl!)
+        //         : RedirectToAction(fallbackAction, routeValues);
 
-        [HttpPost, ValidateAntiForgeryToken]
-        public IActionResult Create(CreateClassStep1Vm vm)
-        {
-            if (!ModelState.IsValid) return View(vm);
-            TempData["ClassName"] = vm.ClassName?.Trim();
-            return RedirectToAction(nameof(Assign));
-        }
+        // // ---------- Wizard/Settings/Help ----------
+        // [HttpGet]
+        // public async Task<IActionResult> Create()
+        // {
+        //     ViewBag.Sidebar = await BuildSidebarAsync();
+        //     return View(new CreateClassStep1Vm());
+        // }
 
-        [HttpGet]
-        public async Task<IActionResult> Assign()
-        {
-            ViewBag.Sidebar = await BuildSidebarAsync();
-            var className = TempData.Peek("ClassName") as string ?? "New Class";
-            return View(new CreateClassStep2Vm { ClassName = className, Students = new() });
-        }
+        // [HttpPost, ValidateAntiForgeryToken]
+        // public IActionResult Create(CreateClassStep1Vm vm)
+        // {
+        //     if (!ModelState.IsValid) return View(vm);
+        //     TempData["ClassName"] = vm.ClassName?.Trim();
+        //     return RedirectToAction(nameof(Assign));
+        // }
 
-        [HttpPost, ValidateAntiForgeryToken]
-        public IActionResult Assign(CreateClassStep2Vm vm, string? action)
-            => RedirectToAction(nameof(Dashboard));
+        // [HttpGet]
+        // public async Task<IActionResult> Assign()
+        // {
+        //     ViewBag.Sidebar = await BuildSidebarAsync();
+        //     var className = TempData.Peek("ClassName") as string ?? "New Class";
+        //     return View(new CreateClassStep2Vm { ClassName = className, Students = new() });
+        // }
 
-        [HttpGet]
-        public async Task<IActionResult> Settings()
-        {
-            ViewBag.Sidebar = await BuildSidebarAsync();
-            return View(new SettingsVm { FirstName = "Jane", LastName = "Doe", Email = "jane.doe@school.edu" });
-        }
+        // [HttpPost, ValidateAntiForgeryToken]
+        // public IActionResult Assign(CreateClassStep2Vm vm, string? action)
+        //     => RedirectToAction(nameof(Dashboard));
 
-        [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Settings(SettingsVm vm)
-        {
-            ViewBag.Sidebar = await BuildSidebarAsync();
-            if (!ModelState.IsValid) return View(vm);
-            TempData["Toast"] = "Settings saved (stub).";
-            return RedirectToAction(nameof(Settings));
-        }
+        // [HttpGet]
+        // public async Task<IActionResult> Settings()
+        // {
+        //     ViewBag.Sidebar = await BuildSidebarAsync();
+        //     return View(new SettingsVm { FirstName = "Jane", LastName = "Doe", Email = "jane.doe@school.edu" });
+        // }
 
-        [HttpPost, ValidateAntiForgeryToken]
-        public IActionResult ChangePassword(ChangePasswordVm vm)
-        {
-            TempData["Toast"] = (string.IsNullOrWhiteSpace(vm.NewPassword) || vm.NewPassword != vm.ConfirmPassword)
-                ? "Passwords do not match."
-                : "Password changed (stub).";
-            return RedirectToAction(nameof(Settings));
-        }
+        // [HttpPost, ValidateAntiForgeryToken]
+        // public async Task<IActionResult> Settings(SettingsVm vm)
+        // {
+        //     ViewBag.Sidebar = await BuildSidebarAsync();
+        //     if (!ModelState.IsValid) return View(vm);
+        //     TempData["Toast"] = "Settings saved (stub).";
+        //     return RedirectToAction(nameof(Settings));
+        // }
 
-        [HttpGet]
-        public async Task<IActionResult> Help()
-        {
-            ViewBag.Sidebar = await BuildSidebarAsync();
-            ViewData["IsAuthPage"] = true;
-            return View();
-        }
+        // [HttpPost, ValidateAntiForgeryToken]
+        // public IActionResult ChangePassword(ChangePasswordVm vm)
+        // {
+        //     TempData["Toast"] = (string.IsNullOrWhiteSpace(vm.NewPassword) || vm.NewPassword != vm.ConfirmPassword)
+        //         ? "Passwords do not match."
+        //         : "Password changed (stub).";
+        //     return RedirectToAction(nameof(Settings));
+        // }
 
-        [HttpGet]
-        public IActionResult DownloadManual()
-        {
-            var bytes = Encoding.UTF8.GetBytes("Kinemathika Teacher Manual (placeholder)");
-            return File(bytes, "text/plain", "Kinemathika-Teacher-Manual.txt");
-        }
+        // [HttpGet]
+        // public async Task<IActionResult> Help()
+        // {
+        //     ViewBag.Sidebar = await BuildSidebarAsync();
+        //     ViewData["IsAuthPage"] = true;
+        //     return View();
+        // }
+
+        // [HttpGet]
+        // public IActionResult DownloadManual()
+        // {
+        //     var bytes = Encoding.UTF8.GetBytes("Kinemathika Teacher Manual (placeholder)");
+        //     return File(bytes, "text/plain", "Kinemathika-Teacher-Manual.txt");
+        // }
+
     }
 }

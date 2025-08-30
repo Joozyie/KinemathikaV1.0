@@ -1,0 +1,144 @@
+@model TeacherOverviewVm
+@{
+    Layout = null;
+    var now = DateTime.Now;
+}
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            margin: 30px;
+        }
+
+        h1,
+        h2 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .kpi-row {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+
+        .kpi-tile {
+            border: 1px solid #ddd;
+            padding: 10px;
+            flex: 1;
+            margin: 0 5px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>@(string.IsNullOrEmpty(Model.ClassName) ? "All Classes Overview" : $"{Model.ClassName} Report")</h1>
+    <p style="text-align:center;">Generated on @now.ToString("MMMM dd, yyyy | hh:mm tt")</p>
+
+    <!-- KPI Row -->
+    <div class="kpi-row">
+        @if (string.IsNullOrEmpty(Model.ClassName))
+        {
+            <div class="kpi-tile">
+                <strong>Total Classes</strong><br />
+                @Model.Dashboard.TotalClasses
+            </div>
+        }
+        <div class="kpi-tile">
+            <strong>Total Students</strong><br />
+            @Model.Dashboard.TotalStudents
+        </div>
+        <div class="kpi-tile">
+            <strong>Avg Attempts / Problem</strong><br />
+            @Model.Dashboard.AvgAttemptsPerProblem.ToString("0.00")
+        </div>
+        <div class="kpi-tile">
+            <strong>Avg Time / Problem</strong><br />
+            @{
+                var t = TimeSpan.FromSeconds(Model.Dashboard.AvgTimePerProblem);
+            }
+            @($"{(int)t.TotalMinutes} min {t.Seconds} sec")
+        </div>
+    </div>
+
+    <!-- Concept Insights Static Table -->
+    <h2>Concept Insights</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Concept</th>
+                <th>Avg Attempts</th>
+                <th>Avg Time (s)</th>
+                <th>Progress (%)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var c in Model.Dashboard.Concepts)
+            {
+                <tr>
+                    <td>@c.ConceptName</td>
+                    <td>@c.AvgAttempts.ToString("0.00")</td>
+                    <td>@c.AvgTime.ToString("0.00")</td>
+                    <td>@Math.Round(c.OverallProgress * 100, 1)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <!-- Student Performance -->
+    <h2>Student Performance</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Student</th>
+                <th>Progress (%)</th>
+                <th>Avg Attempts</th>
+                <th>Avg Time (s)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @{
+                int idx = 1;
+                foreach (var s in Model.StudentPerformances ?? Enumerable.Empty<StudentPerformance>())
+                {
+                    <tr>
+                        <td>@idx</td>
+                        <td>@s.Name</td>
+                        <td>@Math.Round(s.ProgressPct, 1)</td>
+                        <td>@s.AvgAttempts.ToString("0.00")</td>
+                        <td>@s.AvgTimeSec.ToString("0.00")</td>
+                    </tr>
+                    idx++;
+                }
+            }
+        </tbody>
+    </table>
+</body>
+
+</html>

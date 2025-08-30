@@ -14,14 +14,12 @@ namespace Kinemathika.ViewModels.Teacher
         public int TotalAttempts { get; set; }
         public double AvgAttemptsToCorrect { get; set; }
         public double AvgTimeToCorrectSec { get; set; }
-        public decimal AvgAccuracy { get; set; }       // optional
-        public decimal FirstTryRate { get; set; }      // fraction of attempts solved on first try
-        public decimal MasteryRate { get; set; }       // fraction of distinct problems ≤2 tries
+        public decimal AvgAccuracy { get; set; }       
+        public decimal FirstTryRate { get; set; }      
+        public decimal MasteryRate { get; set; }       
 
         // Per-concept breakdown
-        public List<string> Concepts { get; set; } = new();
-        public List<int> ConceptAvgAccuracyPct { get; set; } = new();
-        public List<double> ConceptAvgAttempts { get; set; } = new();
+        public List<ConceptProgressVm> Concepts { get; set; } = new();
 
         // Recent attempts (latest at the top)
         public List<RecentAttemptRow> RecentAttempts { get; set; } = new();

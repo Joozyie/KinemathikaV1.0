@@ -5,22 +5,33 @@
     ViewData["IsAuthPage"] = true;
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Shared/_TeacherLayout.cshtml";
-        var pageTitle = string.IsNullOrEmpty(Model.ClassName)
-        ? "All Class Overview"
-        : $"{Model.ClassName} Overview";
+
+    var pageTitle = string.IsNullOrEmpty(Model.ClassName)
+    ? "All Class Overview"
+    : $"{Model.ClassName} Overview";
 
     Func<string, string> MapConceptName = id => id switch
     {
         "all" => "All Concepts",
-        "sv" => "Speed and Velocity",
-        "dd" => "Distance and Displacement",
-        "acc" => "Acceleration",
+        "C101" => "Speed and Velocity",
+        "C102" => "Distance and Displacement",
+        "C103" => "Acceleration",
         _ => id
     };
 }
 
 @section PageTitle {
-    <div class="fw-bold mb-3">@pageTitle</div>
+    <div class="fw-bold">@pageTitle</div>
+}
+
+@if (!string.IsNullOrEmpty(ViewBag.ClassId))
+{
+    <form class="mt-3 mb-3" asp-action="ClassReport" asp-controller="Report" method="get">
+        <input type="hidden" name="classId" value="@ViewBag.ClassId" />
+        <button type="submit" class="btn btn-primary">
+            Download Class Report
+        </button>
+    </form>
 }
 
 <!-- ==================== TOP KPI ROW ==================== -->
@@ -63,41 +74,36 @@
 <!-- ==================== PROGRESS + CONCEPT INSIGHTS CARD ==================== -->
 <div class="card border-0 shadow-sm rounded-4 mb-3">
     <div class="card-body">
-        <!-- Card Title -->
         <div class="fw-bold fs-5 mb-3">Concept Insights</div>
 
         <div class="row g-4">
-            <!-- Left Column: Donut Chart -->
             <div class="col-12 col-xl-5 text-center d-flex flex-column align-items-center">
                 <div class="position-relative" style="width: 100%; max-width: 260px; aspect-ratio: 1;">
                     <canvas id="progressDonut"></canvas>
-                    <div id="donutCenterText" 
-                        class="position-absolute top-50 start-50 translate-middle fw-bold text-success text-center" 
+                    <div id="donutCenterText"
+                        class="position-absolute top-50 start-50 translate-middle fw-bold text-success text-center"
                         style="font-size: 1.4rem; line-height: 1.4;">
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Concept Insights -->
             <div class="col-12 col-xl-7">
-                <!-- Dropdown -->
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div class="fw-semibold col-3">Select Concept</div>
                     <select id="conceptSelectInsights" class="form-select form-select-sm" style="min-width: 280px;">
-                        @foreach (var c in Model.Dashboard.Concepts)
+                        @foreach (var c in Model.Dashboard.Concepts ?? [])
                         {
                             <option value="@c.ConceptId">@MapConceptName(c.ConceptId)</option>
                         }
                     </select>
                 </div>
 
-                <!-- KPI Tiles -->
                 <div class="row g-3 mb-4">
                     <div class="col-12 col-lg-6">
                         <div class="kpi-tile kpi-orange p-3 rounded-3 shadow-sm text-center">
                             <div class="kpi-label small">Avg Attempts</div>
                             <div class="kpi-value fw-bold fs-4" id="conceptAvgAttempts">
-                                @Model.Dashboard.Concepts.FirstOrDefault()?.AvgAttempts.ToString("0.00") ?? "0.00"
+                                @(Model.Dashboard.Concepts?.FirstOrDefault()?.AvgAttempts.ToString("0.00") ?? "0.00")
                             </div>
                         </div>
                     </div>
@@ -106,7 +112,7 @@
                             <div class="kpi-label small">Avg Time</div>
                             <div class="kpi-value fw-bold fs-4" id="conceptAvgTime">
                                 @{
-                                    var csecs = Model.Dashboard.Concepts.FirstOrDefault()?.AvgTime ?? 0.0;
+                                    var csecs = Model.Dashboard.Concepts?.FirstOrDefault()?.AvgTime ?? 0.0;
                                     var ct = TimeSpan.FromSeconds(csecs);
                                 }
                                 @($"{(int)ct.TotalMinutes} min {ct.Seconds} sec")
@@ -115,7 +121,6 @@
                     </div>
                 </div>
 
-                <!-- Trend Chart -->
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="fw-semibold">Trend Over Time</div>
                     <div class="btn-group">
@@ -130,10 +135,11 @@
         </div>
     </div>
 </div>
+
 <!-- ==================== STUDENT PERFORMANCE TABLE ==================== -->
 @if (Model.StudentPerformances != null && Model.StudentPerformances.Any())
 {
-        <style>
+    <style>
         /* Adjust row height for better readability */
         #studentPerfTable tbody tr {
             height: 48px;
@@ -145,8 +151,13 @@
             color: #495057;
         }
 
+        #studentPerfTable_filter {
+            margin-bottom: 1.5rem;
+        }
+
         /* Add subtle border and shadow to the table */
         #studentPerfTable {
+            margin-bottom: 1.5rem;
             border: 1px solid #dee2e6;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
@@ -170,7 +181,7 @@
     </style>
     <div class="card border-0 shadow-sm rounded-4 mb-3">
         <div class="card-body">
-            <div class="fw-bold fs-5 mb-3">Student Performance</div>
+            <div class="fw-bold fs-5">Student Performance</div>
 
             <table class="table table-hover table-striped" id="studentPerfTable">
                 <thead class="table-light">
@@ -186,7 +197,8 @@
                 <tbody>
                     @foreach (var s in Model.StudentPerformances)
                     {
-                        <tr onclick="window.location='@Url.Action("Student", "Teacher", new { studentId = s.StudentId })'" style="cursor:pointer;">
+                        <tr onclick="window.location='@Url.Action("Student", "Teacher", new { studentId = s.StudentId })'"
+                            style="cursor:pointer;">
                             <td>@s.StudentId</td>
                             <td>@s.Name</td>
                             <td>@Math.Round(s.ProgressPct, 1)</td>
@@ -233,97 +245,75 @@
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // ---------- Donut (Progress) ----------
-    (function () {
-        const donutCanvas = document.getElementById("progressDonut");
-        const centerText = document.getElementById("donutCenterText");
-        let donutChart = null;
-
-        function drawDonut(progressPct) {
-            centerText.textContent = `Progress\n${Math.round(progressPct)}%`;
-
-            if (donutChart) {
-                donutChart.data.datasets[0].data = [progressPct, 100 - progressPct];
-                donutChart.update();
-            } else {
-                donutChart = new Chart(donutCanvas, {
-                    type: 'doughnut',
-                    data: {
-                        datasets: [{
-                            data: [progressPct, 100 - progressPct],
-                            backgroundColor: ['#198754', '#e9ecef'],
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        cutout: '72%',
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: { enabled: false }
-                        }
-                    }
-                });
-            }
-        }
-
-        // Initial draw: "All Concepts"
-        const allConcept = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
-            Model.Dashboard.Concepts.FirstOrDefault(c => c.ConceptId == "all") ?? Model.Dashboard.Concepts.First()
-        ));
-        drawDonut(allConcept.OverallProgress * 100);
-
-        // Update on concept select
-        const conceptSel = document.getElementById("conceptSelectInsights");
-        const concepts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Dashboard.Concepts));
-        conceptSel.addEventListener("change", function () {
-            const selected = concepts.find(c => c.ConceptId === this.value) || concepts[0];
-            drawDonut((selected.OverallProgress ?? 0) * 100);
-        });
-    })();
-
-        // ---------- Concept Insights (Trend) ----------
         (function () {
-            const concepts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
-                Model.Dashboard.Concepts.Select(c => new {
-                    c.ConceptId,
-                    ConceptName = c.ConceptId switch {
-                        "sv" => "Speed and Velocity",
-                        "dd" => "Distance and Displacement",
-                        "ac" => "Acceleration",
-                        _ => c.ConceptName
-                    },
-                    c.AvgAttempts,
-                    c.AvgTime,
-                    c.AttemptsTrend,
-                    c.TimeTrend
-                })
-            ));
+            const concepts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Dashboard.Concepts ?? []));
+            if (!concepts.length) return; // exit if empty
 
-            let selectedConcept = concepts[0];
-            let trendChart = null;
+            const donutCanvas = document.getElementById("progressDonut");
+            const centerText = document.getElementById("donutCenterText");
+            let donutChart = null;
+
+            const initialConcept = concepts.find(c => c.ConceptId === "all") || concepts[0];
+
+            function drawDonut(progressPct) {
+                centerText.textContent = `Progress\n${Math.round(progressPct)}%`;
+
+                if (donutChart) {
+                    donutChart.data.datasets[0].data = [progressPct, 100 - progressPct];
+                    donutChart.update();
+                } else {
+                    donutChart = new Chart(donutCanvas, {
+                        type: 'doughnut',
+                        data: {
+                            datasets: [{
+                                data: [progressPct, 100 - progressPct],
+                                backgroundColor: ['#198754', '#e9ecef'],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '72%',
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: { enabled: false }
+                            }
+                        }
+                    });
+                }
+            }
+
+            drawDonut((initialConcept.OverallProgress ?? 0) * 100);
 
             const conceptSel = document.getElementById("conceptSelectInsights");
+            conceptSel.addEventListener("change", function () {
+                const selected = concepts.find(c => c.ConceptId === this.value) || concepts[0];
+                drawDonut((selected.OverallProgress ?? 0) * 100);
+            });
+
+            // Trend Chart
             const valAttempts = document.getElementById("conceptAvgAttempts");
             const valTime = document.getElementById("conceptAvgTime");
             const btnA = document.getElementById("btnConceptAttempts");
             const btnT = document.getElementById("btnConceptTime");
             const trendCanvas = document.getElementById("conceptTrend");
+            let selectedConcept = initialConcept;
+            let trendChart = null;
 
             function updateConceptSummary(concept) {
                 valAttempts.textContent = (concept.AvgAttempts ?? 0).toFixed(2);
                 const secs = Math.round(concept.AvgTime ?? 0);
-                const m = Math.floor(secs / 60), s = secs % 60;
-                valTime.textContent = `${m} min ${s} sec`;
+                valTime.textContent = `${Math.floor(secs / 60)} min ${secs % 60} sec`;
             }
 
             function drawTrend(metric) {
                 const trendData = metric === "Attempts" ? selectedConcept.AttemptsTrend : selectedConcept.TimeTrend;
-                if (!trendData || !trendData.length) {
-                    trendCanvas.getContext('2d').clearRect(0, 0, trendCanvas.width, trendCanvas.height);
-                    return;
-                }
+                const ctx = trendCanvas.getContext('2d');
+                ctx.clearRect(0, 0, trendCanvas.width, trendCanvas.height);
+
+                if (!trendData?.length) return;
+
                 const labels = trendData.map(pt => pt.Date);
                 const data = trendData.map(pt => pt.Value);
 
@@ -331,10 +321,10 @@
                 trendChart = new Chart(trendCanvas, {
                     type: 'line',
                     data: {
-                        labels: labels,
+                        labels,
                         datasets: [{
                             label: metric === "Attempts" ? "Avg Attempts" : "Avg Time (sec)",
-                            data: data,
+                            data,
                             borderColor: metric === "Attempts" ? "#fd7e14" : "#198754",
                             backgroundColor: "rgba(0,0,0,0)",
                             tension: 0.3,
@@ -346,17 +336,13 @@
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
                         scales: {
-                            x: {
-                                title: { display: true, text: "Date" },
-                                ticks: { autoSkip: true, maxTicksLimit: 6 }
-                            },
+                            x: { title: { display: true, text: "Date" }, ticks: { autoSkip: true, maxTicksLimit: 6 } },
                             y: { title: { display: true, text: metric === "Attempts" ? "Attempts" : "Seconds" } }
                         }
                     }
                 });
             }
 
-            // Init
             updateConceptSummary(selectedConcept);
             drawTrend("Attempts");
 
@@ -372,7 +358,6 @@
                 btnT.classList.remove("btn-primary"); btnT.classList.add("btn-outline-primary");
                 drawTrend("Attempts");
             });
-
             btnT.addEventListener("click", function () {
                 btnT.classList.add("btn-primary"); btnT.classList.remove("btn-outline-primary");
                 btnA.classList.remove("btn-primary"); btnA.classList.add("btn-outline-primary");

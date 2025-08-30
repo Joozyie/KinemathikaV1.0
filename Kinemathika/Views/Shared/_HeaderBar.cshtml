@@ -13,5 +13,9 @@
             <div class="text-white-75">@title</div>
         </div>
     </div>
-    <a class="btn btn-outline-light btn-sm" asp-controller="Account" asp-action="Logout">Logout</a>
+    @* <a class="btn btn-outline-light btn-sm" asp-controller="Account" asp-action="Logout">Logout</a> *@
+    <form asp-controller="Account" asp-action="Logout" method="post">
+        @Html.AntiForgeryToken()
+        <button type="submit" class="btn btn-outline-light btn-sm">Logout</button>
+    </form>
 </nav>
